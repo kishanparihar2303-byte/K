@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import time
+import asyncio
 from typing import Any, Optional
 
 # Load .env file if present (local development)
@@ -129,6 +130,13 @@ def get_default_forward_rules():
 
 try:
     from telethon import TelegramClient
+    # Python 3.10+ no longer auto-creates an event loop outside of async context.
+    # Telethon's __init__ calls asyncio.get_event_loop() internally, which raises
+    # RuntimeError in Python 3.12 if no loop exists. Explicitly create one here.
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
     bot = TelegramClient('bot_ui_session', API_ID, API_HASH)
 except Exception as e:
     logger.error(f"Failed to initialize Bot Client: {e}")
