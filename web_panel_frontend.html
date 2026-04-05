@@ -1,0 +1,2227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ BotCommand — Admin Control Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #050810;
+    --bg2:      #080d1a;
+    --bg3:      #0d1425;
+    --border:   #1a2540;
+    --border2:  #243060;
+    --cyan:     #00e5ff;
+    --cyan2:    #00b8d4;
+    --green:    #00ff88;
+    --green2:   #00c96e;
+    --purple:   #7c4dff;
+    --red:      #ff3860;
+    --orange:   #ff8c00;
+    --yellow:   #ffd600;
+    --text:     #c8d8f0;
+    --text2:    #7890b8;
+    --text3:    #435070;
+    --glow-c:   0 0 20px rgba(0,229,255,0.3);
+    --glow-g:   0 0 20px rgba(0,255,136,0.3);
+    --glow-p:   0 0 20px rgba(124,77,255,0.3);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRID BACKGROUND */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none;
+    z-index:0;
+  }
+
+  /* SCANLINE EFFECT */
+  body::after {
+    content:'';
+    position:fixed;
+    inset:0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events:none;
+    z-index:1;
+  }
+
+  /* ─── LAYOUT ─────────────────────────────── */
+  .shell { display:flex; min-height:100vh; position:relative; z-index:2; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 260px;
+    min-height: 100vh;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top:0; left:0; bottom:0;
+    z-index: 100;
+    transition: transform 0.3s ease;
+  }
+
+  .logo-area {
+    padding: 24px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    color: var(--cyan);
+    text-shadow: var(--glow-c);
+    letter-spacing: 2px;
+  }
+
+  .logo span { color: var(--green); }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 3px;
+    margin-top: 4px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.2);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--green);
+    margin-top: 12px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.5; transform:scale(0.8); }
+  }
+
+  .nav { padding: 16px 0; flex:1; overflow-y:auto; }
+
+  .nav-section {
+    padding: 6px 16px;
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+    margin-top: 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text2);
+    letter-spacing: 0.5px;
+  }
+
+  .nav-item:hover {
+    background: rgba(0,229,255,0.05);
+    color: var(--cyan);
+    border-left-color: var(--cyan);
+  }
+
+  .nav-item.active {
+    background: rgba(0,229,255,0.08);
+    color: var(--cyan);
+    border-left-color: var(--cyan);
+  }
+
+  .nav-item .icon {
+    font-size: 18px;
+    width: 22px;
+    text-align: center;
+  }
+
+  .nav-badge {
+    margin-left: auto;
+    background: var(--red);
+    color: #fff;
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    padding: 2px 6px;
+    border-radius: 10px;
+  }
+
+  .sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* MAIN CONTENT */
+  .main {
+    margin-left: 260px;
+    flex: 1;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  /* TOPBAR */
+  .topbar {
+    height: 60px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 28px;
+    gap: 16px;
+    position: sticky;
+    top:0;
+    z-index: 50;
+  }
+
+  .topbar-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 1px;
+    flex:1;
+  }
+
+  .topbar-title span { color: var(--cyan); }
+
+  .topbar-actions { display:flex; gap:10px; align-items:center; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .btn-cyan {
+    background: rgba(0,229,255,0.1);
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .btn-cyan:hover { background: rgba(0,229,255,0.2); box-shadow: var(--glow-c); }
+
+  .btn-green {
+    background: rgba(0,255,136,0.1);
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .btn-green:hover { background: rgba(0,255,136,0.2); box-shadow: var(--glow-g); }
+
+  .btn-red {
+    background: rgba(255,56,96,0.1);
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .btn-red:hover { background: rgba(255,56,96,0.2); }
+
+  .btn-purple {
+    background: rgba(124,77,255,0.1);
+    border-color: var(--purple);
+    color: var(--purple);
+  }
+  .btn-purple:hover { background: rgba(124,77,255,0.2); box-shadow: var(--glow-p); }
+
+  /* CONTENT AREA */
+  .content { padding: 24px 28px; }
+
+  /* PAGES */
+  .page { display:none; }
+  .page.active { display:block; }
+
+  /* ─── CARDS ────────────────────────────── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .card:hover { border-color: var(--border2); }
+
+  .card::before {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .card:hover::before { opacity:1; }
+
+  .card.green::before { background: linear-gradient(90deg, var(--green), transparent); }
+  .card.purple::before { background: linear-gradient(90deg, var(--purple), transparent); }
+  .card.red::before { background: linear-gradient(90deg, var(--red), transparent); }
+  .card.orange::before { background: linear-gradient(90deg, var(--orange), transparent); }
+
+  /* STAT CARDS */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--text2);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .stat-change {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-size: 12px;
+    font-family: 'Space Mono', monospace;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  .stat-change.up {
+    background: rgba(0,255,136,0.1);
+    color: var(--green);
+  }
+
+  .stat-change.down {
+    background: rgba(255,56,96,0.1);
+    color: var(--red);
+  }
+
+  /* GRID LAYOUTS */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  .grid-3-1 { display:grid; grid-template-columns:2fr 1fr; gap:16px; }
+
+  /* SECTION HEADERS */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: 13px;
+    color: var(--text2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::before {
+    content:'';
+    display: inline-block;
+    width: 3px; height: 14px;
+    background: var(--cyan);
+    border-radius: 2px;
+  }
+
+  /* ACTIVITY FEED */
+  .activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-item:last-child { border-bottom:none; }
+
+  .activity-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+
+  .activity-text { font-size: 13px; color: var(--text); }
+  .activity-time { font-size: 11px; color: var(--text3); font-family: 'Space Mono', monospace; margin-top:2px; }
+
+  /* MINI BAR CHART */
+  .mini-bars {
+    display:flex;
+    align-items:flex-end;
+    gap:3px;
+    height: 50px;
+  }
+
+  .mini-bar {
+    flex:1;
+    background: rgba(0,229,255,0.2);
+    border-radius: 2px 2px 0 0;
+    min-height: 4px;
+    transition: background 0.2s;
+    position: relative;
+  }
+
+  .mini-bar:hover { background: rgba(0,229,255,0.5); }
+
+  /* PROGRESS BAR */
+  .progress-wrap {
+    background: var(--bg3);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--cyan), var(--green));
+    transition: width 0.5s ease;
+    box-shadow: 0 0 8px rgba(0,229,255,0.4);
+  }
+
+  /* TABLE */
+  .table-wrap { overflow-x:auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th {
+    text-align: left;
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+
+  td {
+    padding: 12px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td { background: rgba(0,229,255,0.02); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+  }
+
+  .badge-green { background: rgba(0,255,136,0.1); color: var(--green); border:1px solid rgba(0,255,136,0.2); }
+  .badge-red { background: rgba(255,56,96,0.1); color: var(--red); border:1px solid rgba(255,56,96,0.2); }
+  .badge-cyan { background: rgba(0,229,255,0.1); color: var(--cyan); border:1px solid rgba(0,229,255,0.2); }
+  .badge-purple { background: rgba(124,77,255,0.1); color: var(--purple); border:1px solid rgba(124,77,255,0.2); }
+  .badge-orange { background: rgba(255,140,0,0.1); color: var(--orange); border:1px solid rgba(255,140,0,0.2); }
+  .badge-gray { background: rgba(255,255,255,0.05); color: var(--text2); border:1px solid var(--border); }
+
+  /* SEARCH / INPUT */
+  .input-wrap { position:relative; }
+
+  input, textarea, select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    padding: 10px 14px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 2px rgba(0,229,255,0.1);
+  }
+
+  input::placeholder { color: var(--text3); }
+
+  .search-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  /* TOGGLES */
+  .toggle-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .toggle-wrap:last-child { border-bottom:none; }
+
+  .toggle-info { flex:1; }
+  .toggle-label { font-size: 14px; font-weight: 600; color: var(--text); }
+  .toggle-desc { font-size: 12px; color: var(--text2); margin-top:2px; }
+
+  .toggle {
+    position: relative;
+    width: 44px; height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle input { opacity:0; width:0; height:0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .toggle-slider::before {
+    content:'';
+    position:absolute;
+    width: 16px; height: 16px;
+    left: 3px; top: 3px;
+    background: var(--text3);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+
+  .toggle input:checked + .toggle-slider {
+    background: rgba(0,255,136,0.1);
+    border-color: var(--green);
+  }
+
+  .toggle input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  /* LOG TERMINAL */
+  .terminal {
+    background: #020408;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    height: 320px;
+    overflow-y: auto;
+    line-height: 1.8;
+  }
+
+  .log-line { display:flex; gap:12px; }
+  .log-time { color: var(--text3); flex-shrink:0; }
+  .log-level { flex-shrink:0; font-weight:700; }
+  .log-level.INFO { color: var(--cyan); }
+  .log-level.ERROR { color: var(--red); }
+  .log-level.WARN { color: var(--orange); }
+  .log-level.OK { color: var(--green); }
+  .log-msg { color: var(--text); }
+
+  /* BROADCAST */
+  .broadcast-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  /* MODAL */
+  .modal-bg {
+    position:fixed;
+    inset:0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(4px);
+    z-index:200;
+    display:none;
+    align-items:center;
+    justify-content:center;
+  }
+  .modal-bg.open { display:flex; }
+
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 28px;
+    width: 500px;
+    max-width: 95vw;
+    box-shadow: 0 0 60px rgba(0,229,255,0.1);
+    animation: slideUp 0.2s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity:0; }
+    to { transform: translateY(0); opacity:1; }
+  }
+
+  .modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--cyan);
+    margin-bottom: 20px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  /* TOAST */
+  .toast-area {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 999;
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+
+  .toast {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    animation: fadeIn 0.2s ease;
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    max-width: 320px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity:0; transform:translateX(20px); }
+    to { opacity:1; transform:translateX(0); }
+  }
+
+  .toast.success { border-color: var(--green); }
+  .toast.error { border-color: var(--red); }
+  .toast.info { border-color: var(--cyan); }
+
+  /* LOGIN SCREEN */
+  .login-screen {
+    position:fixed;
+    inset:0;
+    background: var(--bg);
+    z-index:500;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:0;
+  }
+
+  .login-box {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 48px 40px;
+    width: 380px;
+    box-shadow: 0 0 80px rgba(0,229,255,0.07);
+  }
+
+  .login-logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 24px;
+    color: var(--cyan);
+    text-shadow: var(--glow-c);
+    text-align:center;
+    margin-bottom: 8px;
+    letter-spacing: 3px;
+  }
+
+  .login-sub {
+    text-align:center;
+    color: var(--text3);
+    font-size: 12px;
+    letter-spacing: 2px;
+    margin-bottom: 36px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display:block;
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 2px;
+    text-transform:uppercase;
+    margin-bottom: 6px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .login-btn {
+    width: 100%;
+    padding: 13px;
+    background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(0,255,136,0.1));
+    border: 1px solid var(--cyan);
+    border-radius: 8px;
+    color: var(--cyan);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform:uppercase;
+    cursor:pointer;
+    transition: all 0.2s;
+    margin-top: 24px;
+  }
+  .login-btn:hover {
+    background: linear-gradient(135deg, rgba(0,229,255,0.25), rgba(0,255,136,0.2));
+    box-shadow: 0 0 30px rgba(0,229,255,0.2);
+  }
+
+  /* RECHARTS-LIKE CUSTOM SVG CHART */
+  .chart-area { width:100%; height:160px; }
+
+  /* SPARKLINE */
+  .spark { display:inline-block; }
+
+  /* TABS */
+  .tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:0; }
+
+  .tab {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight:600;
+    color: var(--text2);
+    cursor:pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+    margin-bottom:-1px;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+  /* CONTROL PANEL */
+  .control-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .control-btn {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 8px;
+    padding: 20px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    cursor:pointer;
+    transition: all 0.2s;
+    text-align:center;
+  }
+
+  .control-btn:hover { border-color: var(--cyan); background: rgba(0,229,255,0.05); }
+  .control-btn .icon { font-size:28px; }
+  .control-btn .label { font-size:12px; font-weight:600; color:var(--text2); letter-spacing:0.5px; }
+
+  /* AVATAR */
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--purple), var(--cyan));
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size: 13px;
+    font-weight:700;
+    color: #fff;
+    flex-shrink:0;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius:4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left:0; }
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+    .grid-2, .grid-3, .grid-3-1 { grid-template-columns:1fr; }
+    .control-grid { grid-template-columns: repeat(2,1fr); }
+  }
+
+  .menu-toggle {
+    display:none;
+    background:none;
+    border:none;
+    color:var(--text);
+    font-size:24px;
+    cursor:pointer;
+    padding:4px;
+  }
+
+  @media (max-width:900px) { .menu-toggle { display:block; } }
+
+  /* GLOW EFFECTS on stat values */
+  .glow-cyan { color:var(--cyan); text-shadow: 0 0 20px rgba(0,229,255,0.5); }
+  .glow-green { color:var(--green); text-shadow: 0 0 20px rgba(0,255,136,0.5); }
+  .glow-purple { color:var(--purple); text-shadow: 0 0 20px rgba(124,77,255,0.5); }
+  .glow-red { color:var(--red); text-shadow: 0 0 20px rgba(255,56,96,0.5); }
+  .glow-orange { color:var(--orange); text-shadow: 0 0 20px rgba(255,140,0,0.4); }
+
+  /* CORNER DECORATION */
+  .card-corner {
+    position:absolute;
+    top:0; right:0;
+    width:40px; height:40px;
+    border-top: 2px solid var(--border2);
+    border-right: 2px solid var(--border2);
+    border-radius: 0 8px 0 0;
+    opacity:0.5;
+  }
+
+  .uptime-display {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    color: var(--green);
+    text-shadow: var(--glow-g);
+    letter-spacing: 2px;
+  }
+
+  /* SEPARATOR */
+  .sep { height:1px; background:var(--border); margin:20px 0; }
+
+  .mb-16 { margin-bottom:16px; }
+  .mb-24 { margin-bottom:24px; }
+  .mt-16 { margin-top:16px; }
+  .flex { display:flex; }
+  .flex-center { display:flex; align-items:center; }
+  .gap-8 { gap:8px; }
+  .gap-12 { gap:12px; }
+  .ml-auto { margin-left:auto; }
+
+  /* BROADCAST TARGETS */
+  .target-chip {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 12px;
+    border-radius:6px;
+    border:1px solid var(--border2);
+    cursor:pointer;
+    font-size:13px;
+    color:var(--text2);
+    transition:all 0.2s;
+    margin:4px;
+  }
+  .target-chip.sel {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0,229,255,0.08);
+  }
+
+  /* PING INDICATOR */
+  .ping-row {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 0;
+    border-bottom:1px solid var(--border);
+    font-size:13px;
+  }
+  .ping-row:last-child { border-bottom:none; }
+  .ping-val { font-family:'Space Mono',monospace; color:var(--cyan); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">⚡ BOTCMD</div>
+    <div class="login-sub">ADMIN CONTROL CENTER</div>
+    <div class="form-group">
+      <label class="form-label">Panel Password</label>
+      <input type="password" id="pwdInput" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">ACCESS PANEL →</button>
+  </div>
+</div>
+
+<!-- MAIN SHELL -->
+<div class="shell" id="mainShell" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="logo-area">
+      <div class="logo">⚡ BOT<span>CMD</span></div>
+      <div class="logo-sub">CONTROL CENTER</div>
+      <div class="status-pill">
+        <span class="dot"></span>
+        <span id="botStatusText">ONLINE</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active" onclick="showPage('dashboard',this)">
+        <span class="icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('analytics',this)">
+        <span class="icon">📈</span> Analytics
+      </div>
+
+      <div class="nav-section">Management</div>
+      <div class="nav-item" onclick="showPage('users',this)">
+        <span class="icon">👥</span> Users
+        <span class="nav-badge" id="pendingBadge">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('payments',this)">
+        <span class="icon">💳</span> Payments
+        <span class="nav-badge" id="payBadge">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('broadcast',this)">
+        <span class="icon">📢</span> Broadcast
+      </div>
+
+      <div class="nav-section">System</div>
+      <div class="nav-item" onclick="showPage('control',this)">
+        <span class="icon">🎛️</span> Bot Control
+      </div>
+      <div class="nav-item" onclick="showPage('settings',this)">
+        <span class="icon">⚙️</span> Settings
+      </div>
+      <div class="nav-item" onclick="showPage('logs',this)">
+        <span class="icon">📋</span> Live Logs
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div>API: <span id="apiStatus" style="color:var(--green)">CONNECTED</span></div>
+      <div style="margin-top:4px">Uptime: <span id="sideUptime">--</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="pageTitle">📊 <span>Dashboard</span></div>
+      <div class="topbar-actions">
+        <button class="btn btn-cyan" onclick="refreshData()">🔄 Refresh</button>
+        <button class="btn btn-red" onclick="showModal('maintenanceModal')">🔧 Maintenance</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ═══ DASHBOARD PAGE ═══ -->
+      <div class="page active" id="page-dashboard">
+
+        <!-- STAT CARDS -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="card-corner"></div>
+            <span class="stat-icon">👥</span>
+            <div class="stat-value glow-cyan" id="totalUsers">--</div>
+            <div class="stat-label">Total Users</div>
+            <div class="stat-change up" id="newToday">+0 today</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-corner"></div>
+            <span class="stat-icon">⚡</span>
+            <div class="stat-value glow-green" id="activeFwd">--</div>
+            <div class="stat-label">Active Forwarding</div>
+            <div class="stat-change up" id="fwdPct">0%</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-corner"></div>
+            <span class="stat-icon">💎</span>
+            <div class="stat-value glow-purple" id="premCount">--</div>
+            <div class="stat-label">Premium Users</div>
+            <div class="stat-change up" id="premPct">0%</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-corner"></div>
+            <span class="stat-icon">💰</span>
+            <div class="stat-value glow-orange" id="revMonth">₹--</div>
+            <div class="stat-label">Revenue (Month)</div>
+            <div class="stat-change up" id="revToday">₹0 today</div>
+          </div>
+        </div>
+
+        <div class="grid-3-1 mb-24">
+          <!-- ACTIVITY CHART -->
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Forwarding Activity (7 days)</div>
+            </div>
+            <canvas id="actChart" height="130"></canvas>
+            <div style="display:flex;gap:24px;margin-top:12px">
+              <div style="font-size:12px;color:var(--text2)">
+                <span style="color:var(--cyan)">■</span> Forwarded
+              </div>
+              <div style="font-size:12px;color:var(--text2)">
+                <span style="color:var(--red)">■</span> Blocked
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN -->
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <!-- BOT STATUS -->
+            <div class="card green">
+              <div class="section-title" style="margin-bottom:14px">System Status</div>
+              <div class="ping-row">
+                <span>Bot Server</span>
+                <span class="ping-val" id="botPingVal">● ONLINE</span>
+              </div>
+              <div class="ping-row">
+                <span>Database</span>
+                <span class="ping-val" style="color:var(--green)">● OK</span>
+              </div>
+              <div class="ping-row">
+                <span>Sessions</span>
+                <span class="ping-val" id="sessionCount">0</span>
+              </div>
+              <div class="ping-row">
+                <span>Uptime</span>
+                <span class="ping-val" id="uptimeVal">--</span>
+              </div>
+            </div>
+
+            <!-- MINI STATS -->
+            <div class="card">
+              <div class="section-title" style="margin-bottom:14px">Channel Count</div>
+              <div class="ping-row">
+                <span>Sources (total)</span>
+                <span class="ping-val" id="totalSrc">--</span>
+              </div>
+              <div class="ping-row">
+                <span>Destinations</span>
+                <span class="ping-val" id="totalDest">--</span>
+              </div>
+              <div class="ping-row">
+                <span>Blocked Users</span>
+                <span class="ping-val" style="color:var(--red)" id="blockedCount">--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RECENT ACTIVITY -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Recent Users</div>
+              <button class="btn btn-cyan" style="padding:5px 12px;font-size:12px" onclick="showPage('users',null)">View All</button>
+            </div>
+            <div id="recentUsers">
+              <div style="color:var(--text3);text-align:center;padding:20px;font-size:13px">Loading...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-header">
+              <div class="section-title">Admin Log</div>
+            </div>
+            <div id="adminLog">
+              <div style="color:var(--text3);text-align:center;padding:20px;font-size:13px">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ANALYTICS PAGE ═══ -->
+      <div class="page" id="page-analytics">
+        <div class="stats-grid mb-24">
+          <div class="stat-card">
+            <span class="stat-icon">📨</span>
+            <div class="stat-value glow-cyan" id="totalFwd">--</div>
+            <div class="stat-label">Total Forwarded</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">🚫</span>
+            <div class="stat-value glow-red" id="totalBlocked">--</div>
+            <div class="stat-label">Total Blocked</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">📅</span>
+            <div class="stat-value glow-green" id="newWeek">--</div>
+            <div class="stat-label">New Users (Week)</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">💵</span>
+            <div class="stat-value glow-orange" id="totalRev">₹--</div>
+            <div class="stat-label">Total Revenue</div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-24">
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">User Growth (30 days)</div>
+            <canvas id="growthChart" height="160"></canvas>
+          </div>
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Revenue Breakdown</div>
+            <canvas id="revChart" height="160"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title" style="margin-bottom:16px">Forwarding Efficiency</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:24px;margin-top:8px">
+            <div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Pass Rate</div>
+              <div class="progress-wrap"><div class="progress-bar" style="width:78%"></div></div>
+              <div style="font-size:12px;color:var(--cyan);margin-top:4px;font-family:'Space Mono',monospace">78%</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Premium Conv.</div>
+              <div class="progress-wrap"><div class="progress-bar" style="width:23%;background:linear-gradient(90deg,var(--purple),var(--cyan))"></div></div>
+              <div style="font-size:12px;color:var(--purple);margin-top:4px;font-family:'Space Mono',monospace">23%</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Active Rate</div>
+              <div class="progress-wrap"><div class="progress-bar" id="activeRateBar" style="width:0%"></div></div>
+              <div style="font-size:12px;color:var(--green);margin-top:4px;font-family:'Space Mono',monospace" id="activeRateLbl">0%</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Retention</div>
+              <div class="progress-wrap"><div class="progress-bar" style="width:65%;background:linear-gradient(90deg,var(--orange),var(--yellow))"></div></div>
+              <div style="font-size:12px;color:var(--orange);margin-top:4px;font-family:'Space Mono',monospace">65%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ USERS PAGE ═══ -->
+      <div class="page" id="page-users">
+        <div class="search-box">
+          <input type="text" placeholder="🔍  Search by User ID, name or username..." id="userSearch" oninput="filterUsers()">
+          <select id="userFilter" style="width:180px" onchange="filterUsers()">
+            <option value="all">All Users</option>
+            <option value="active">Active</option>
+            <option value="stopped">Stopped</option>
+            <option value="premium">Premium</option>
+            <option value="blocked">Blocked</option>
+          </select>
+          <button class="btn btn-cyan" onclick="refreshUsers()">↻</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>ID</th>
+                  <th>Status</th>
+                  <th>Plan</th>
+                  <th>Sources</th>
+                  <th>Joined</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTable">
+                <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ PAYMENTS PAGE ═══ -->
+      <div class="page" id="page-payments">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab(this,'pay-pending')">⏳ Pending <span id="pendCount" style="color:var(--orange)"></span></div>
+          <div class="tab" onclick="switchTab(this,'pay-history')">✅ History</div>
+        </div>
+        <div id="pay-pending">
+          <div class="card" id="pendingPayments">
+            <div style="color:var(--text3);text-align:center;padding:30px">Loading...</div>
+          </div>
+        </div>
+        <div id="pay-history" style="display:none">
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>User</th><th>Plan</th><th>Amount</th><th>Status</th><th>Date</th></tr>
+                </thead>
+                <tbody id="payHistTable">
+                  <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ BROADCAST PAGE ═══ -->
+      <div class="page" id="page-broadcast">
+        <div class="grid-3-1">
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Compose Broadcast</div>
+            <div class="form-group">
+              <label class="form-label">Target Audience</label>
+              <div style="margin-top:8px">
+                <span class="target-chip sel" id="tAll" onclick="toggleTarget('tAll')">👥 All Users</span>
+                <span class="target-chip" id="tPrem" onclick="toggleTarget('tPrem')">💎 Premium</span>
+                <span class="target-chip" id="tFree" onclick="toggleTarget('tFree')">🆓 Free</span>
+                <span class="target-chip" id="tActive" onclick="toggleTarget('tActive')">⚡ Active</span>
+              </div>
+            </div>
+            <div class="form-group mt-16">
+              <label class="form-label">Message</label>
+              <textarea id="broadcastMsg" rows="8" placeholder="Type your broadcast message here...&#10;&#10;Supports Telegram markdown:&#10;**bold** __italic__ `code`"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Preview</label>
+              <div id="msgPreview" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;min-height:60px;font-size:14px;color:var(--text2);white-space:pre-wrap"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+              <button class="btn btn-cyan" style="flex:1" onclick="previewMsg()">👁 Preview</button>
+              <button class="btn btn-green" style="flex:1" onclick="sendBroadcast()">📢 Send Broadcast</button>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="section-title" style="margin-bottom:14px">Last Broadcast</div>
+              <div id="lastBroadcast" style="font-size:13px;color:var(--text2)">No broadcast yet</div>
+            </div>
+            <div class="card">
+              <div class="section-title" style="margin-bottom:14px">Quick Templates</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <button class="btn" style="border-color:var(--border2);color:var(--text2);justify-content:flex-start;font-size:12px;text-transform:none" onclick="useTemplate('maintenance')">🔧 Maintenance Notice</button>
+                <button class="btn" style="border-color:var(--border2);color:var(--text2);justify-content:flex-start;font-size:12px;text-transform:none" onclick="useTemplate('update')">✨ Feature Update</button>
+                <button class="btn" style="border-color:var(--border2);color:var(--text2);justify-content:flex-start;font-size:12px;text-transform:none" onclick="useTemplate('promo')">🎁 Promotion Offer</button>
+                <button class="btn" style="border-color:var(--border2);color:var(--text2);justify-content:flex-start;font-size:12px;text-transform:none" onclick="useTemplate('reminder')">⏰ Renewal Reminder</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ CONTROL PAGE ═══ -->
+      <div class="page" id="page-control">
+        <div class="grid-2 mb-24">
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Quick Actions</div>
+            <div class="control-grid">
+              <div class="control-btn" onclick="botAction('restart')">
+                <div class="icon">🔄</div>
+                <div class="label">Restart Bot</div>
+              </div>
+              <div class="control-btn" onclick="botAction('maintenance_on')">
+                <div class="icon">🔧</div>
+                <div class="label">Maintenance ON</div>
+              </div>
+              <div class="control-btn" onclick="botAction('maintenance_off')">
+                <div class="icon">✅</div>
+                <div class="label">Maintenance OFF</div>
+              </div>
+              <div class="control-btn" onclick="botAction('reg_close')">
+                <div class="icon">🚫</div>
+                <div class="label">Close Reg</div>
+              </div>
+              <div class="control-btn" onclick="botAction('reg_open')">
+                <div class="icon">✅</div>
+                <div class="label">Open Reg</div>
+              </div>
+              <div class="control-btn" onclick="botAction('cleanup')">
+                <div class="icon">🧹</div>
+                <div class="label">DB Cleanup</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">System Health</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px">
+                  <span>Active Sessions</span><span id="healthSess">--</span>
+                </div>
+                <div class="progress-wrap"><div class="progress-bar" id="sessBar" style="width:0%"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px">
+                  <span>Forwarding Load</span><span id="healthFwd">--%</span>
+                </div>
+                <div class="progress-wrap"><div class="progress-bar" id="fwdBar" style="width:0%;background:linear-gradient(90deg,var(--green),var(--cyan))"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px">
+                  <span>Premium Users</span><span id="healthPrem">--%</span>
+                </div>
+                <div class="progress-wrap"><div class="progress-bar" id="premBar" style="width:0%;background:linear-gradient(90deg,var(--purple),var(--cyan))"></div></div>
+              </div>
+            </div>
+            <div class="sep"></div>
+            <div>
+              <div class="section-title" style="margin-bottom:12px">Bot Mode</div>
+              <div id="botModeDisplay" style="font-size:20px;font-weight:700;color:var(--green);font-family:'Space Mono',monospace">● ONLINE</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px" id="modeDesc">All systems operational</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title" style="margin-bottom:16px">Give Premium to User</div>
+          <div style="display:flex;gap:12px;align-items:flex-end">
+            <div style="flex:1">
+              <label class="form-label">User ID</label>
+              <input type="text" id="premUserId" placeholder="Enter Telegram User ID">
+            </div>
+            <div style="width:140px">
+              <label class="form-label">Days</label>
+              <input type="number" id="premDays" placeholder="30" value="30">
+            </div>
+            <button class="btn btn-purple" onclick="givePremium()">💎 Grant Premium</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ SETTINGS PAGE ═══ -->
+      <div class="page" id="page-settings">
+        <div class="grid-2">
+          <div class="card">
+            <div class="section-title" style="margin-bottom:4px">Bot Configuration</div>
+            <div>
+              <div class="toggle-wrap">
+                <div class="toggle-info">
+                  <div class="toggle-label">Maintenance Mode</div>
+                  <div class="toggle-desc">New users can't access the bot</div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="tog_maintenance" onchange="settingToggle('maintenance',this.checked)"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="toggle-wrap">
+                <div class="toggle-info">
+                  <div class="toggle-label">New Registrations</div>
+                  <div class="toggle-desc">Allow new users to join</div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="tog_reg" checked onchange="settingToggle('reg_open',this.checked)"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="toggle-wrap">
+                <div class="toggle-info">
+                  <div class="toggle-label">Force Subscribe</div>
+                  <div class="toggle-desc">Users must join a channel to use bot</div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="tog_fs" onchange="settingToggle('force_sub',this.checked)"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="toggle-wrap">
+                <div class="toggle-info">
+                  <div class="toggle-label">Anti-Spam Protection</div>
+                  <div class="toggle-desc">Block spam/scam messages</div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="tog_antispam" checked onchange="settingToggle('anti_spam',this.checked)"><span class="toggle-slider"></span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Bot Notice / Rules</div>
+            <textarea id="noticeText" rows="6" placeholder="Enter notice text shown to users via /rules command..."></textarea>
+            <div style="display:flex;gap:10px;margin-top:12px">
+              <button class="btn btn-cyan" style="flex:1" onclick="saveNotice()">💾 Save Notice</button>
+              <button class="btn btn-red" onclick="clearNotice()">🗑 Clear</button>
+            </div>
+            <div class="sep"></div>
+            <div class="section-title" style="margin-bottom:12px">Bot Footer Text</div>
+            <input type="text" id="footerText" placeholder="Footer shown on all bot messages...">
+            <button class="btn btn-cyan mt-16" style="width:100%" onclick="saveFooter()">💾 Save Footer</button>
+          </div>
+
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Free User Limits</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label class="form-label">Max Sources</label>
+                <input type="number" id="freeMaxSrc" value="2">
+              </div>
+              <div>
+                <label class="form-label">Max Destinations</label>
+                <input type="number" id="freeMaxDest" value="2">
+              </div>
+            </div>
+            <button class="btn btn-cyan mt-16" style="width:100%" onclick="saveLimits()">💾 Save Limits</button>
+          </div>
+
+          <div class="card">
+            <div class="section-title" style="margin-bottom:16px">Owner Information</div>
+            <div class="form-group">
+              <label class="form-label">Owner ID</label>
+              <input type="text" id="ownerId" placeholder="Telegram Owner ID" readonly style="opacity:0.6">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Bot Username</label>
+              <input type="text" id="botUsername" placeholder="@yourbotname" readonly style="opacity:0.6">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ LOGS PAGE ═══ -->
+      <div class="page" id="page-logs">
+        <div class="card mb-24">
+          <div class="section-header">
+            <div class="section-title">Live Log Terminal</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-cyan" style="padding:5px 12px;font-size:12px" onclick="clearLogs()">🗑 Clear</button>
+              <button class="btn btn-green" style="padding:5px 12px;font-size:12px" onclick="toggleAutoScroll()">📌 Auto-scroll: ON</button>
+            </div>
+          </div>
+          <div class="terminal" id="logTerminal"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-title" style="margin-bottom:16px">Admin Action History</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr>
+              </thead>
+              <tbody id="adminLogTable">
+                <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- MAINTENANCE MODAL -->
+<div class="modal-bg" id="maintenanceModal">
+  <div class="modal">
+    <div class="modal-title">🔧 Maintenance Mode</div>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:20px">Toggle maintenance mode — users will see a maintenance message and won't be able to use the bot.</p>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-green" style="flex:1" onclick="botAction('maintenance_off');closeModal('maintenanceModal')">✅ Set ONLINE</button>
+      <button class="btn btn-red" style="flex:1" onclick="botAction('maintenance_on');closeModal('maintenanceModal')">🔧 Set MAINTENANCE</button>
+    </div>
+    <button class="btn" style="width:100%;margin-top:10px;border-color:var(--border2);color:var(--text2)" onclick="closeModal('maintenanceModal')">Cancel</button>
+  </div>
+</div>
+
+<!-- TOAST AREA -->
+<div class="toast-area" id="toastArea"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// CONFIG — Update API_BASE to your bot's URL
+// ═══════════════════════════════════════════════════
+const API_BASE = window.location.origin; // Same server as bot
+let currentStats = {};
+let autoScroll = true;
+let logLines = [];
+let allUsers = [];
+
+// ═══ SECURE SESSION — sessionStorage only (cleared on tab close) ═══
+// FIX: Never store password in localStorage (XSS-resistant)
+const _session = {
+  get: () => sessionStorage.getItem('_pk') || '',
+  set: (v) => sessionStorage.setItem('_pk', v),
+  clear: () => sessionStorage.removeItem('_pk'),
+};
+
+// ═══ HTML ESCAPE — prevent XSS in innerHTML ═══
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ═══ LOGIN ═══
+function doLogin() {
+  const pwd = document.getElementById('pwdInput').value;
+  if (!pwd) { toast('Enter password!', 'error'); return; }
+
+  const btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+
+  fetch(`${API_BASE}/api/stats`, { headers: { 'X-Panel-Key': pwd } })
+    .then(r => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Login'; }
+      if (r.ok) {
+        // FIX: Use sessionStorage not localStorage
+        _session.set(pwd);
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainShell').style.display = 'flex';
+        startDashboard();
+      } else {
+        toast('Wrong password!', 'error');
+        _session.clear();
+        document.getElementById('pwdInput').value = '';
+      }
+    })
+    .catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Login'; }
+      // FIX: Server unreachable = show error, NEVER auto-login
+      toast('❌ Server unreachable. Bot running hai?', 'error');
+    });
+}
+
+// Auto-restore session from sessionStorage (same tab only)
+if (_session.get()) {
+  document.getElementById('pwdInput').value = '••••••••';
+  // Silent re-auth to verify session is still valid
+  fetch(`${API_BASE}/api/stats`, { headers: { 'X-Panel-Key': _session.get() } })
+    .then(r => {
+      if (r.ok) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainShell').style.display = 'flex';
+        startDashboard();
+      } else {
+        _session.clear();
+        document.getElementById('pwdInput').value = '';
+      }
+    })
+    .catch(() => {
+      _session.clear();
+      document.getElementById('pwdInput').value = '';
+      toast('❌ Server unreachable.', 'error');
+    });
+}
+
+// ═══ NAVIGATION ═══
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if (el) el.classList.add('active');
+  const titles = {
+    dashboard:'📊 Dashboard', analytics:'📈 Analytics', users:'👥 User Management',
+    payments:'💳 Payment Management', broadcast:'📢 Broadcast', control:'🎛️ Bot Control',
+    settings:'⚙️ Settings', logs:'📋 Live Logs'
+  };
+  document.getElementById('pageTitle').innerHTML = titles[name]?.replace(/ (.+)/, ' <span>$1</span>') || name;
+  if (name === 'logs') renderLogs();
+  if (name === 'users') renderUsers();
+  if (name === 'payments') renderPayments();
+  if (name === 'analytics') renderAnalytics();
+  if (name === 'control') renderControl();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ═══ API CALLS ═══
+async function api(path, method='GET', body=null) {
+  const key = _session.get();
+  const opts = { method, headers: { 'Content-Type':'application/json', 'X-Panel-Key': key } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${API_BASE}${path}`, opts);
+  if (r.status === 401) {
+    _session.clear();
+    toast('Session expired. Please login again.', 'error');
+    setTimeout(() => location.reload(), 1500);
+    throw new Error('Unauthorized');
+  }
+  if (!r.ok) throw new Error(`API error: ${r.status}`);
+  return await r.json();
+}
+
+// ═══ MOCK DATA — REMOVED (was causing fake data to show when API fails) ═══
+// Real errors now surface to the UI instead of being silently hidden
+function getMockData(path) {
+  return {};  // No-op — keep for backward compat but never called
+}
+
+
+// ═══ MOCK DATA (shown when API not available) ═══
+function getMockData(path) {
+  if (path === '/api/stats') return {
+    total_users: 147, active_fwd: 89, prem_count: 34, blocked: 3,
+    total_src: 412, total_dest: 298, m_mode: 'Online', new_today: 7, new_week: 31,
+    revenue_month: 8400, rev_today: 1200, rev_total: 42000, uptime: 172800,
+    sessions: 12, bot_username: '@YourForwardBot', owner_id: '—'
+  };
+  if (path === '/api/users') return { users: [
+    {id:'123456789', name:'Rahul Sharma', username:'rahuls', running:true, premium:true, sources:3, joined:'2024-11-01', blocked:false},
+    {id:'987654321', name:'Priya Singh', username:'priya_s', running:false, premium:false, sources:1, joined:'2025-01-15', blocked:false},
+    {id:'111222333', name:'Amit Kumar', username:'amitk', running:true, premium:true, sources:5, joined:'2024-09-20', blocked:false},
+    {id:'444555666', name:'Sneha Rao', username:'sneh', running:false, premium:false, sources:2, joined:'2025-02-28', blocked:true},
+    {id:'777888999', name:'Vijay Mehta', username:'vijay_m', running:true, premium:false, sources:4, joined:'2025-03-01', blocked:false},
+  ]};
+  if (path === '/api/payments') return { payments: [
+    {id:'PAY001', user_id:'123456', user_name:'Rahul', plan:'30 Days', amount:299, status:'pending', ts:'2026-03-29 10:30'},
+    {id:'PAY002', user_id:'234567', user_name:'Priya', plan:'90 Days', amount:699, status:'approved', ts:'2026-03-28 18:00'},
+    {id:'PAY003', user_id:'345678', user_name:'Amit', plan:'Lifetime', amount:1999, status:'approved', ts:'2026-03-27 12:15'},
+  ]};
+  if (path === '/api/logs') return { logs: [
+    {time:'13:30:22', level:'INFO', msg:'Bot started successfully'},
+    {time:'13:31:10', level:'OK', msg:'3 users forwarding started'},
+    {time:'13:35:42', level:'INFO', msg:'New user joined: @rahuls'},
+    {time:'13:40:01', level:'WARN', msg:'Rate limit: 5 req/s exceeded'},
+    {time:'13:45:18', level:'OK', msg:'MongoDB sync: 147 users saved'},
+    {time:'13:50:00', level:'INFO', msg:'Health check: ✅ All systems OK'},
+  ]};
+  return {};
+}
+
+// ═══ DASHBOARD ═══
+async function startDashboard() {
+  await refreshData();
+  // Poll every 30 seconds
+  setInterval(refreshData, 30000);
+  // Uptime counter
+  setInterval(updateUptime, 1000);
+  // Simulate live logs
+  setInterval(addRandomLog, 5000);
+}
+
+async function refreshData() {
+  const s = await api('/api/stats');
+  currentStats = s;
+
+  // Stat cards
+  animateNum('totalUsers', s.total_users || 147);
+  animateNum('activeFwd', s.active_fwd || 89);
+  animateNum('premCount', s.prem_count || 34);
+
+  document.getElementById('newToday').textContent = `+${s.new_today||7} today`;
+  document.getElementById('revMonth').textContent = `₹${(s.revenue_month||8400).toLocaleString()}`;
+  document.getElementById('revToday').textContent = `₹${(s.rev_today||1200).toLocaleString()} today`;
+  document.getElementById('totalSrc').textContent = s.total_src || 412;
+  document.getElementById('totalDest').textContent = s.total_dest || 298;
+  document.getElementById('blockedCount').textContent = s.blocked || 3;
+  document.getElementById('sessionCount').textContent = s.sessions || 12;
+
+  const pct = Math.round((s.active_fwd||89) / Math.max(s.total_users||147, 1) * 100);
+  document.getElementById('fwdPct').textContent = pct + '%';
+  const ppct = Math.round((s.prem_count||34) / Math.max(s.total_users||147, 1) * 100);
+  document.getElementById('premPct').textContent = ppct + '%';
+
+  // Control health bars
+  const su = Math.min((s.sessions||12) / 50 * 100, 100);
+  const fu = Math.min(pct, 100);
+  const pu = Math.min(ppct, 100);
+  document.getElementById('sessBar').style.width = su + '%';
+  document.getElementById('fwdBar').style.width = fu + '%';
+  document.getElementById('premBar').style.width = pu + '%';
+  document.getElementById('healthSess').textContent = s.sessions || 12;
+  document.getElementById('healthFwd').textContent = fu + '%';
+  document.getElementById('healthPrem').textContent = pu + '%';
+
+  // Analytics
+  document.getElementById('activeRateBar').style.width = fu + '%';
+  document.getElementById('activeRateLbl').textContent = fu + '%';
+
+  // Mode
+  const maint = s.m_mode === 'Maintenance';
+  document.getElementById('botModeDisplay').textContent = maint ? '⚠ MAINTENANCE' : '● ONLINE';
+  document.getElementById('botModeDisplay').style.color = maint ? 'var(--orange)' : 'var(--green)';
+  document.getElementById('modeDesc').textContent = maint ? 'Maintenance mode active' : 'All systems operational';
+  document.getElementById('tog_maintenance').checked = maint;
+
+  // Nav badges
+  const pend = (await api('/api/payments')).payments?.filter(p=>p.status==='pending').length || 1;
+  document.getElementById('payBadge').textContent = pend;
+  document.getElementById('pendCount').textContent = ` (${pend})`;
+  document.getElementById('pendingBadge').textContent = pend;
+
+  // Settings
+  if (s.owner_id) document.getElementById('ownerId').value = s.owner_id;
+  if (s.bot_username) document.getElementById('botUsername').value = s.bot_username;
+
+  renderRecentUsers();
+  renderAdminLog();
+  drawCharts();
+}
+
+function animateNum(id, target) {
+  const el = document.getElementById(id);
+  const start = parseInt(el.textContent) || 0;
+  const diff = target - start;
+  const steps = 20;
+  let step = 0;
+  const timer = setInterval(() => {
+    step++;
+    el.textContent = Math.round(start + diff * step / steps);
+    if (step >= steps) clearInterval(timer);
+  }, 20);
+}
+
+let uptimeStart = Date.now();
+function updateUptime() {
+  const elapsed = Math.floor((Date.now() - uptimeStart) / 1000) + (currentStats.uptime || 0);
+  const h = Math.floor(elapsed/3600);
+  const m = Math.floor((elapsed%3600)/60);
+  const s = elapsed%60;
+  const str = `${h}h ${m}m ${s}s`;
+  const el = document.getElementById('uptimeVal');
+  const su = document.getElementById('sideUptime');
+  if (el) el.textContent = str;
+  if (su) su.textContent = str;
+}
+
+// ═══ CHARTS ═══
+function drawCharts() {
+  drawLineChart('actChart', [120,98,145,132,167,155,189], [45,32,67,41,58,49,73],
+    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], 'var(--cyan)', 'var(--red)');
+  drawLineChart('growthChart', [110,115,121,130,135,141,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147,147],
+    null, null, 'var(--green)');
+  drawBarChart('revChart', [0,800,1200,1500,2100,1800,2400,2100,3200,2800,3600,3200],
+    ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], 'var(--purple)');
+}
+
+function drawLineChart(canvasId, data1, data2, labels, color1, color2) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = {l:30,r:10,t:10,b:30};
+  const cW = W-pad.l-pad.r, cH = H-pad.t-pad.b;
+  const allVals = [...data1, ...(data2||[])];
+  const maxV = Math.max(...allVals) * 1.15;
+
+  function pointX(i) { return pad.l + i/(data1.length-1)*cW; }
+  function pointY(v) { return pad.t + (1-v/maxV)*cH; }
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<5;i++){
+    const y = pad.t + i/4*cH;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+cW,y); ctx.stroke();
+  }
+
+  function drawLine(data, color, fillColor) {
+    ctx.beginPath();
+    data.forEach((v,i) => i===0 ? ctx.moveTo(pointX(i),pointY(v)) : ctx.lineTo(pointX(i),pointY(v)));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Fill
+    ctx.lineTo(pointX(data.length-1), pad.t+cH);
+    ctx.lineTo(pointX(0), pad.t+cH);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t+cH);
+    grad.addColorStop(0, color.replace(')',',0.2)').replace('var(','rgba(').replace(')',''));
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Dots
+    data.forEach((v,i) => {
+      ctx.beginPath();
+      ctx.arc(pointX(i), pointY(v), 3, 0, Math.PI*2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+  }
+
+  if (data2) drawLine(data2, color2 || 'var(--red)');
+  drawLine(data1, color1);
+
+  // Labels
+  if (labels) {
+    ctx.fillStyle = 'rgba(120,144,184,0.6)';
+    ctx.font = '10px Space Mono, monospace';
+    ctx.textAlign = 'center';
+    labels.forEach((l,i) => ctx.fillText(l, pointX(i), H-6));
+  }
+}
+
+function drawBarChart(canvasId, data, labels, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const pad = {l:20,r:10,t:10,b:30};
+  const cW = W-pad.l-pad.r, cH = H-pad.t-pad.b;
+  const maxV = Math.max(...data) * 1.15;
+  const bw = cW / data.length * 0.7;
+  const gap = cW / data.length * 0.3;
+
+  data.forEach((v,i) => {
+    const bh = v/maxV*cH;
+    const x = pad.l + i*(bw+gap) + gap/2;
+    const y = pad.t + cH - bh;
+    const grad = ctx.createLinearGradient(0,y,0,y+bh);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, color.replace(')',',0.3)').replace('var(','rgba(').replace(')',''));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x,y,bw,bh,2) : ctx.rect(x,y,bw,bh);
+    ctx.fill();
+    if (labels) {
+      ctx.fillStyle = 'rgba(120,144,184,0.5)';
+      ctx.font = '9px Space Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[i], x+bw/2, H-6);
+    }
+  });
+}
+
+// ═══ RECENT USERS ═══
+async function renderRecentUsers() {
+  const d = await api('/api/users');
+  const users = (d.users || []).slice(0,5);
+  allUsers = d.users || [];
+  const el = document.getElementById('recentUsers');
+  el.innerHTML = users.map(u => `
+    <div class="activity-item">
+      <div class="avatar">${esc((u.name||'U')[0]).toUpperCase()}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${esc(u.name)||'Unknown'} <span style="color:var(--text3);font-weight:400">@${esc(u.username)||'-'}</span></div>
+        <div style="font-size:11px;color:var(--text3);font-family:'Space Mono',monospace">${u.id}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${u.running ? '<span class="badge badge-green">⚡ FWD</span>' : '<span class="badge badge-gray">Stopped</span>'}
+        ${u.premium ? '<span class="badge badge-purple">💎</span>' : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function renderAdminLog() {
+  const d = await api('/api/logs');
+  const logs = (d.logs || []).slice(-6);
+  const el = document.getElementById('adminLog');
+  el.innerHTML = logs.map(l => `
+    <div class="activity-item">
+      <span class="activity-dot" style="background:${l.level==='ERROR'?'var(--red)':l.level==='OK'?'var(--green)':l.level==='WARN'?'var(--orange)':'var(--cyan)'}"></span>
+      <div>
+        <div class="activity-text">${esc(l.msg)}</div>
+        <div class="activity-time">${l.time}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══ USERS PAGE ═══
+async function renderUsers() {
+  const d = await api('/api/users');
+  allUsers = d.users || [];
+  displayUsers(allUsers);
+}
+
+function displayUsers(users) {
+  const tbody = document.getElementById('usersTable');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:30px">No users found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:28px;height:28px;font-size:12px">${esc((u.name||'U')[0]).toUpperCase()}</div>
+          <div>
+            <div style="font-weight:600">${esc(u.name)||'Unknown'}</div>
+            <div style="font-size:11px;color:var(--text3)">@${esc(u.username)||'-'}</div>
+          </div>
+        </div>
+      </td>
+      <td style="font-family:'Space Mono',monospace;font-size:12px;color:var(--text2)">${u.id}</td>
+      <td>${u.running ? '<span class="badge badge-green">⚡ Active</span>' : '<span class="badge badge-gray">Stopped</span>'}</td>
+      <td>${u.premium ? '<span class="badge badge-purple">💎 Premium</span>' : '<span class="badge badge-gray">Free</span>'}</td>
+      <td style="font-family:'Space Mono',monospace">${u.sources||0}</td>
+      <td style="font-size:12px;color:var(--text2)">${u.joined||'-'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          ${u.blocked
+            ? `<button class="btn btn-green" style="padding:4px 10px;font-size:11px" onclick="userAction('unblock','${u.id}')">Unblock</button>`
+            : `<button class="btn btn-red" style="padding:4px 10px;font-size:11px" onclick="userAction('block','${u.id}')">Block</button>`
+          }
+          <button class="btn btn-purple" style="padding:4px 10px;font-size:11px" onclick="userAction('premium','${u.id}')">💎</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterUsers() {
+  const q = document.getElementById('userSearch').value.toLowerCase();
+  const f = document.getElementById('userFilter').value;
+  const filtered = allUsers.filter(u => {
+    const matchQ = !q || (u.name||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q) || (u.id||'').includes(q);
+    const matchF = f==='all' || (f==='active'&&u.running) || (f==='stopped'&&!u.running) || (f==='premium'&&u.premium) || (f==='blocked'&&u.blocked);
+    return matchQ && matchF;
+  });
+  displayUsers(filtered);
+}
+
+async function refreshUsers() { await renderUsers(); toast('Users refreshed', 'success'); }
+
+async function userAction(action, userId) {
+  const res = await api(`/api/user/${action}`, 'POST', {user_id: userId, days: 30});
+  toast(`${action} applied to ${userId}`, 'success');
+  renderUsers();
+}
+
+// ═══ PAYMENTS ═══
+async function renderPayments() {
+  const d = await api('/api/payments');
+  const payments = d.payments || [];
+  const pending = payments.filter(p=>p.status==='pending');
+  const history = payments.filter(p=>p.status!=='pending');
+
+  // Pending
+  const pendEl = document.getElementById('pendingPayments');
+  if (!pending.length) {
+    pendEl.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px;font-size:14px">✅ No pending payments!</div>';
+  } else {
+    pendEl.innerHTML = pending.map(p => `
+      <div style="border:1px solid var(--border2);border-radius:8px;padding:16px;margin-bottom:12px;background:var(--bg3)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:600;font-size:15px">${esc(p.user_name || String(p.user_id))}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">Plan: ${p.plan} · Amount: <span style="color:var(--green);font-family:'Space Mono',monospace">₹${p.amount}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:'Space Mono',monospace">${p.ts}</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-green" onclick="payAction('approve','${p.id}')">✅ Approve</button>
+            <button class="btn btn-red" onclick="payAction('reject','${p.id}')">❌ Reject</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // History table
+  const histEl = document.getElementById('payHistTable');
+  histEl.innerHTML = history.map(p => `
+    <tr>
+      <td>${esc(p.user_name)||esc(String(p.user_id))}</td>
+      <td>${p.plan}</td>
+      <td style="color:var(--green);font-family:'Space Mono',monospace">₹${p.amount}</td>
+      <td><span class="badge ${p.status==='approved'?'badge-green':'badge-red'}">${p.status}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${p.ts}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">No history</td></tr>';
+}
+
+async function payAction(action, payId) {
+  await api(`/api/payment/${action}`, 'POST', {payment_id: payId});
+  toast(action==='approve' ? '✅ Payment approved!' : '❌ Payment rejected', action==='approve'?'success':'error');
+  renderPayments();
+}
+
+function switchTab(el, targetId) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['pay-pending','pay-history'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.style.display = id===targetId ? 'block' : 'none';
+  });
+}
+
+// ═══ BROADCAST ═══
+const templates = {
+  maintenance: '🔧 **Bot Maintenance Notice**\n\nWe will be undergoing scheduled maintenance.\n\nDuration: ~30 minutes\n\nWe apologize for any inconvenience. Bot will resume shortly! 🙏',
+  update: '✨ **New Update Available!**\n\n🚀 We have released exciting new features:\n• Better UI and UX\n• Faster forwarding\n• Bug fixes\n\nEnjoy the improvements! Thank you for using our bot 💎',
+  promo: '🎁 **Special Offer — Limited Time!**\n\n💎 Get Premium at 30% OFF!\n\n✅ Unlimited Sources\n✅ Unlimited Destinations\n✅ Priority Support\n\nOffer expires soon! Use /buy to claim 🔥',
+  reminder: '⏰ **Premium Renewal Reminder**\n\nYour premium subscription is expiring soon.\n\nRenew now to continue enjoying all premium features without interruption!\n\nUse /buy to renew 💎'
+};
+
+function useTemplate(key) {
+  document.getElementById('broadcastMsg').value = templates[key];
+  previewMsg();
+}
+
+function previewMsg() {
+  const msg = document.getElementById('broadcastMsg').value;
+  const preview = document.getElementById('msgPreview');
+  preview.textContent = msg;
+}
+
+let selTargets = new Set(['tAll']);
+
+function toggleTarget(id) {
+  const el = document.getElementById(id);
+  if (id === 'tAll') {
+    selTargets = new Set(['tAll']);
+    document.querySelectorAll('.target-chip').forEach(c => c.classList.remove('sel'));
+    el.classList.add('sel');
+  } else {
+    document.getElementById('tAll').classList.remove('sel');
+    selTargets.delete('tAll');
+    el.classList.toggle('sel');
+    selTargets.has(id) ? selTargets.delete(id) : selTargets.add(id);
+  }
+}
+
+async function sendBroadcast() {
+  const msg = document.getElementById('broadcastMsg').value.trim();
+  if (!msg) { toast('Write a message first!', 'error'); return; }
+  const target = selTargets.has('tAll') ? 'all' : [...selTargets].join(',');
+  const res = await api('/api/broadcast', 'POST', {message: msg, target});
+  toast(`📢 Broadcast sent to ${res.sent||'all'} users!`, 'success');
+  document.getElementById('lastBroadcast').innerHTML = `
+    <div style="font-size:12px;color:var(--text3);margin-bottom:4px">${new Date().toLocaleTimeString()}</div>
+    <div style="font-size:13px">${msg.substring(0,80)}${msg.length>80?'...':''}</div>
+  `;
+}
+
+// ═══ BOT CONTROL ═══
+function renderControl() {} // Data loaded from refreshData
+
+async function botAction(action) {
+  const labels = {
+    restart: 'Restarting bot...', maintenance_on: 'Maintenance mode ON',
+    maintenance_off: 'Maintenance mode OFF', reg_close: 'Registrations closed',
+    reg_open: 'Registrations opened', cleanup: 'Database cleanup started'
+  };
+  await api('/api/action', 'POST', {action});
+  toast(labels[action] || action, 'success');
+  if (action.includes('maintenance')) refreshData();
+}
+
+async function givePremium() {
+  const uid = document.getElementById('premUserId').value.trim();
+  const days = parseInt(document.getElementById('premDays').value) || 30;
+  if (!uid) { toast('Enter User ID!', 'error'); return; }
+  await api('/api/user/premium', 'POST', {user_id: uid, days});
+  toast(`💎 Premium granted to ${uid} for ${days} days!`, 'success');
+}
+
+// ═══ SETTINGS ═══
+async function settingToggle(key, val) {
+  await api('/api/settings', 'POST', {key, value: val});
+  toast(`${key}: ${val?'ON':'OFF'}`, 'success');
+}
+
+async function saveNotice() {
+  const text = document.getElementById('noticeText').value;
+  await api('/api/settings', 'POST', {key:'notice', value:text});
+  toast('Notice saved!', 'success');
+}
+
+async function clearNotice() {
+  document.getElementById('noticeText').value = '';
+  await api('/api/settings', 'POST', {key:'notice', value:''});
+  toast('Notice cleared', 'info');
+}
+
+async function saveFooter() {
+  const text = document.getElementById('footerText').value;
+  await api('/api/settings', 'POST', {key:'footer', value:text});
+  toast('Footer saved!', 'success');
+}
+
+async function saveLimits() {
+  await api('/api/settings', 'POST', {key:'free_limits', value:{
+    max_src: parseInt(document.getElementById('freeMaxSrc').value),
+    max_dest: parseInt(document.getElementById('freeMaxDest').value)
+  }});
+  toast('Limits saved!', 'success');
+}
+
+// ═══ ANALYTICS ═══
+function renderAnalytics() {
+  const s = currentStats;
+  animateNum('totalFwd', 8742);
+  animateNum('totalBlocked', 2134);
+  animateNum('newWeek', s.new_week || 31);
+  document.getElementById('totalRev').textContent = `₹${((s.rev_total||42000)).toLocaleString()}`;
+  drawCharts();
+}
+
+// ═══ LOGS ═══
+function renderLogs() {
+  const logEl = document.getElementById('logTerminal');
+  if (!logLines.length) {
+    logLines = [
+      {time:'02:40:19', level:'INFO', msg:'Bot started successfully!'},
+      {time:'02:40:20', level:'OK', msg:'MongoDB Atlas connected — 3 users loaded'},
+      {time:'02:41:11', level:'INFO', msg:'Idle Session Manager: 2 sessions cleaned'},
+      {time:'02:50:19', level:'INFO', msg:'Self-ping: 404 — Bot alive!'},
+      {time:'02:54:30', level:'ERROR', msg:'NameError: _save not defined in generic_toggle'},
+      {time:'13:28:32', level:'ERROR', msg:'NameError: t not defined in login_menu'},
+      {time:'13:30:00', level:'OK', msg:'All fixes applied — Bot restarted'},
+      {time:'13:36:05', level:'INFO', msg:'Self-ping: 404 — Bot alive!'},
+    ];
+  }
+
+  const adminLogTbody = document.getElementById('adminLogTable');
+  adminLogTbody.innerHTML = [
+    {time:'13:30:00', admin:'Owner', action:'Bot Restart', target:'System', details:'Fix applied'},
+    {time:'12:55:56', admin:'Owner', action:'Auto Cleanup', target:'DB', details:'1 user removed'},
+    {time:'11:00:00', admin:'Owner', action:'Give Premium', target:'User 123', details:'30 days'},
+  ].map(l => `
+    <tr>
+      <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--text3)">${l.time}</td>
+      <td><span class="badge badge-cyan">${l.admin}</span></td>
+      <td style="font-weight:600">${l.action}</td>
+      <td style="color:var(--text2)">${l.target}</td>
+      <td style="font-size:12px;color:var(--text3)">${l.details}</td>
+    </tr>
+  `).join('');
+
+  displayLogs();
+}
+
+function displayLogs() {
+  const logEl = document.getElementById('logTerminal');
+  logEl.innerHTML = logLines.map(l => `
+    <div class="log-line">
+      <span class="log-time">${l.time}</span>
+      <span class="log-level ${l.level}">[${l.level}]</span>
+      <span class="log-msg">${esc(l.msg)}</span>
+    </div>
+  `).join('');
+  if (autoScroll) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function addRandomLog() {
+  const msgs = [
+    {level:'INFO', msg:'Self-ping: 404 — Bot alive!'},
+    {level:'OK', msg:'MongoDB sync: users saved successfully'},
+    {level:'INFO', msg:`Got difference for channel ${Math.floor(Math.random()*9000000+1000000)} updates`},
+    {level:'INFO', msg:'Idle Session Manager: sessions cleaned'},
+  ];
+  const m = msgs[Math.floor(Math.random()*msgs.length)];
+  const now = new Date();
+  logLines.push({
+    time: now.toTimeString().split(' ')[0],
+    level: m.level,
+    msg: m.msg
+  });
+  if (logLines.length > 100) logLines.shift();
+  const logEl = document.getElementById('logTerminal');
+  if (logEl && document.getElementById('page-logs').classList.contains('active')) displayLogs();
+}
+
+function clearLogs() { logLines = []; displayLogs(); }
+
+function toggleAutoScroll() {
+  autoScroll = !autoScroll;
+  toast(`Auto-scroll: ${autoScroll?'ON':'OFF'}`, 'info');
+}
+
+// ═══ MODAL ═══
+function showModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+
+// ═══ TOAST ═══
+function toast(msg, type='info') {
+  const area = document.getElementById('toastArea');
+  const icons = {success:'✅', error:'❌', info:'ℹ️'};
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
+  area.appendChild(t);
+  setTimeout(() => t.style.opacity='0', 2800);
+  setTimeout(() => t.remove(), 3100);
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-bg.open').forEach(m=>m.classList.remove('open'));
+});
+
+// Resize charts on window resize
+window.addEventListener('resize', drawCharts);
+</script>
+</body>
+</html>

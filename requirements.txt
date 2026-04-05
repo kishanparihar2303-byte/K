@@ -1,0 +1,37 @@
+# ═══════════════════════════════════════════
+# Bot Dependencies
+# Python 3.12.x REQUIRED (3.13 has asyncio breaking changes with Telethon)
+# ═══════════════════════════════════════════
+
+# RAM: ~512MB | MongoDB: ~512MB (free)
+# ═══════════════════════════════════════════
+
+# Core
+telethon==1.36.0          # Telegram MTProto client — Python 3.11 compatible
+cryptg>=0.4.0             # Fast AES-IGE encryption for Telethon (C extension, 10x faster than Python fallback)
+aiohttp>=3.9.0            # Async HTTP (web server + anti-sleep)
+python-dotenv>=1.0.0      # .env file support
+
+# Database
+motor>=3.3.0              # Async MongoDB driver (free Atlas tier)
+
+# Image processing (Watermark feature)
+Pillow>=10.0.0            # PIL — image manipulation
+
+# Translation
+deep-translator>=1.11.0   # Free translation API
+
+# Timezone
+pytz>=2024.1              # Timezone support
+
+# Utilities
+psutil>=5.9.0             # Memory/CPU monitoring (health check)
+
+# NOTE: 'requests' removed — urllib used instead (saves ~2MB RAM)
+# NOTE: All pinned to minimum working versions for stability
+
+cryptography>=41.0.0     # Required for session encryption (session_vault.py)
+
+pymongo>=4.6.0          # Needed for bulk_write in database.py MongoDB saves
+
+qrcode[pil]>=7.4.2      # QR code generation for UPI payments

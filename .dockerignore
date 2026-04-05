@@ -1,0 +1,52 @@
+# Version control
+.git
+.gitattributes
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Runtime data — never bake into image
+*.session
+*.session-journal
+bot_ui_session*
+wal.jsonl
+wal.jsonl.bak
+msg_dedup.sqlite
+msg_dedup.sqlite-wal
+msg_dedup.sqlite-shm
+db.json
+db.json.bak
+dlq.jsonl
+scheduler_queue.jsonl
+*.bak
+
+# Logs
+*.log
+logs/
+
+# Environment / secrets
+.env
+.env.*
+secrets/
+
+# Dev / test
+tests/
+*.test.py
+pytest.ini
+.pytest_cache/
+coverage.xml
+.coverage
+
+# Docs
+README.md
+FIXES_CHANGELOG.md
+*.md
+
+# OS junk
+.DS_Store
+Thumbs.db
