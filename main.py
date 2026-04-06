@@ -1359,6 +1359,7 @@ async def input_handler(event):
                     pass
             dest_title = dest_title or str(val)
             perm_warn = ""
+            if u_client:
                 # ── Issue #16: Auto permission check ─────────────────────────
                 try:
                     from telethon.tl.functions.channels import GetParticipantRequest
