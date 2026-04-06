@@ -280,7 +280,7 @@ async def set_delay_flow(event):
              Button.inline("10s",              b"delay_preset_10")],
             [Button.inline("30s",              b"delay_preset_30"),
              Button.inline("60s (1 min)",      b"delay_preset_60")],
-            [Button.inline("✏️ Custom value type karo", b"settings_menu")],
+            [Button.inline("✏️ Custom value type karo (seconds)", b"delay_unit_Seconds")],
             [Button.inline("🔙 Settings",      b"settings_menu")],
         ])
     except errors.MessageNotModifiedError:
