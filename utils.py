@@ -466,7 +466,107 @@ async def resolve_id(client, text):
             return f"@{text}"
         return text
 
-# ══════════════════════════════════════════════════════
+async def resolve_id_and_name(client, text):
+    """
+    ✅ SMART: Link/username/ID ko resolve karo — ID aur Channel Name dono ek saath return karo.
+    
+    Purana resolve_id() sirf ID deta tha — name discard ho jaata tha.
+    Unknown/private channels mein baad mein get_entity() fail karta tha → link dikhti thi.
+    
+    Ab: entity ek baar fetch hoti hai → ID + name dono capture → cache mein store.
+    User ko hamesha proper name dikhega, chahe channel unknown ho.
+    
+    Returns: (resolved_id_str, channel_name_or_None)
+    """
+    from telethon import utils as tl_utils
+    text = str(text).strip()
+    name = None
+
+    def _extract_name(ent):
+        return (getattr(ent, "title", None)
+                or getattr(ent, "first_name", None)
+                or getattr(ent, "username", None))
+
+    try:
+        # ── t.me/c/XXXXXXX/MSG — private channel direct link ──────────
+        if "t.me/c/" in text:
+            parts = text.split('/')
+            cid = parts[parts.index('c') + 1]
+            resolved = f"-100{cid}"
+            try:
+                ent = await client.get_entity(int(resolved))
+                name = _extract_name(ent)
+            except Exception:
+                pass
+            return resolved, name
+
+        # ── t.me/... link ───────────────────────────────────────────────
+        elif "t.me/" in text:
+            slug = text.split('t.me/')[-1].split('/')[0].strip('/')
+
+            if slug.startswith('+'):
+                # Private invite link
+                hash_only = slug.lstrip('+')
+                try:
+                    from telethon.tl.functions.messages import ImportChatInviteRequest
+                    result = await client(ImportChatInviteRequest(hash_only))
+                    chat = result.chats[0]
+                    name = _extract_name(chat)
+                    return str(tl_utils.get_peer_id(chat)), name
+                except Exception as join_err:
+                    err_str = str(join_err).lower()
+                    if "already" in err_str or "participant" in err_str:
+                        # Pehle se member — CheckChatInviteRequest se info lo
+                        try:
+                            from telethon.tl.functions.messages import CheckChatInviteRequest
+                            inv = await client(CheckChatInviteRequest(hash_only))
+                            chat = getattr(inv, 'chat', None)
+                            if chat:
+                                name = _extract_name(chat)
+                                return str(tl_utils.get_peer_id(chat)), name
+                        except Exception:
+                            pass
+                    # get_entity fallback
+                    try:
+                        ent = await client.get_entity(f"+{hash_only}")
+                        name = _extract_name(ent)
+                        return str(tl_utils.get_peer_id(ent)), name
+                    except Exception:
+                        pass
+                # Sab fail — raw hash return karo, name nahi mila
+                return f"+{hash_only}", None
+
+            else:
+                # Public channel: t.me/username
+                target = f"@{slug}" if not slug.startswith('@') else slug
+                ent = await client.get_entity(target)
+                name = _extract_name(ent) or target
+                return str(tl_utils.get_peer_id(ent)), name
+
+        # ── Pure numeric ID ─────────────────────────────────────────────
+        if text.lstrip('-').isdigit():
+            try:
+                ent = await client.get_entity(int(text))
+                name = _extract_name(ent)
+                return str(tl_utils.get_peer_id(ent)), name
+            except Exception:
+                return text, None
+
+        # ── @username ───────────────────────────────────────────────────
+        target = text if text.startswith('@') else f"@{text}"
+        ent = await client.get_entity(target)
+        name = _extract_name(ent) or target
+        return str(tl_utils.get_peer_id(ent)), name
+
+    except Exception as e:
+        logger.debug(f"resolve_id_and_name fallback '{text}': {e}")
+        # Fallback: public link se username extract karo — naam jaisa kuch to dikhao
+        if "t.me/" in text and "+" not in text:
+            slug = text.split("t.me/")[-1].split("/")[0].strip("/")
+            name = f"@{slug}"
+        return text, name
+
+
 # ⚡ GLOBAL DISPLAY NAME CACHE (TTL=10 min, max 2000 entries)
 # Telegram API entity lookup bohot slow hoti hai — ek baar fetch
 # karo, 10 min tak RAM mein raho. Bot buttons fast dikhenge.

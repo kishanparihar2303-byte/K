@@ -30,7 +30,7 @@ from database import (
     CLEANUP_CONFIG, GLOBAL_STATE, save_persistent_db,
     is_blocked
 )
-from utils import resolve_id, normalize_url, normalize_channel_id, sources_match, channel_already_exists, get_display_name
+from utils import resolve_id, resolve_id_and_name, normalize_url, normalize_channel_id, sources_match, channel_already_exists, get_display_name
 from config import get_default_forward_rules
 from forward_engine import start_user_forwarder
 from ui.source_menu import get_index_by_src, get_src_by_index
@@ -1181,17 +1181,21 @@ async def input_handler(event):
                 await event.respond(limit_msg, buttons=[Button.inline("💎 Premium Info", b"premium_info")])
                 break
 
-            # Resolve ID
+            # Resolve ID + Name (ek hi API call mein dono)
+            channel_name_resolved = None
             if u_client:
                 try:
-                    resolved = await resolve_id(u_client, val)
+                    resolved, channel_name_resolved = await resolve_id_and_name(u_client, val)
                     if resolved:
                         val = resolved
+                        # Name turant cache mein save karo — unknown channels ke liye bhi
+                        if channel_name_resolved:
+                            data.setdefault("channel_names", {})[str(val)] = channel_name_resolved
                 except (ChannelPrivateError, InviteHashInvalidError):
                     errors_list.append(f"`{val}` — Channel private hai, pehle join karo")
                     continue
                 except Exception:
-                    pass
+                    channel_name_resolved = None
             else:
                 if val.lstrip("-").isdigit():
                     pass
@@ -1235,13 +1239,15 @@ async def input_handler(event):
 
             data["sources"].append(val)
 
-            # Channel title fetch
-            channel_title = str(val)
-            if u_client:
+            # Channel title — resolve_id_and_name ne pehle se name de diya (extra API call nahi)
+            channel_title = (channel_name_resolved
+                             or data.get("channel_names", {}).get(str(val)))
+            if not channel_title and u_client:
                 try:
                     channel_title = await get_display_name(u_client, val, user_id)
                 except Exception:
                     pass
+            channel_title = channel_title or str(val)
             added.append(f"📺 {channel_title} — `{val}`")
 
         data["step"] = None
@@ -1286,17 +1292,20 @@ async def input_handler(event):
                 await event.respond(limit_msg, buttons=[Button.inline("💎 Premium Info", b"premium_info")])
                 break
 
-            # Resolve ID
+            # Resolve ID + Name (ek hi API call mein dono)
+            channel_name_resolved = None
             if u_client:
                 try:
-                    resolved = await resolve_id(u_client, val)
+                    resolved, channel_name_resolved = await resolve_id_and_name(u_client, val)
                     if resolved:
                         val = resolved
+                        if channel_name_resolved:
+                            data.setdefault("channel_names", {})[str(val)] = channel_name_resolved
                 except (ChannelPrivateError, InviteHashInvalidError):
                     errors_list.append(f"`{val}` — Channel private hai, pehle join karo")
                     continue
                 except Exception:
-                    pass
+                    channel_name_resolved = None
             else:
                 if val.lstrip("-").isdigit():
                     pass
@@ -1340,14 +1349,16 @@ async def input_handler(event):
 
             data["destinations"].append(val)
 
-            # Channel title fetch + permission check
-            dest_title = str(val)
-            perm_warn = ""
-            if u_client:
+            # Channel title — resolve_id_and_name ne pehle se name de diya
+            dest_title = (channel_name_resolved
+                          or data.get("channel_names", {}).get(str(val)))
+            if not dest_title and u_client:
                 try:
                     dest_title = await get_display_name(u_client, val, user_id)
                 except Exception:
                     pass
+            dest_title = dest_title or str(val)
+            perm_warn = ""
                 # ── Issue #16: Auto permission check ─────────────────────────
                 try:
                     from telethon.tl.functions.channels import GetParticipantRequest

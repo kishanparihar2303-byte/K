@@ -354,80 +354,44 @@ def _get_send_sem(user_id: int) -> asyncio.Semaphore:
     return _USER_SEND_SEM[user_id]
 
 
-def _update_dest_health(data: dict, dest_key: str, success: bool,
-                         user_id: int = None, reason_hint: str = ""):
-    """
-    ✅ SMART Destination Health Tracker
-    - 5 consecutive fails → auto-disable (user ko kuch nahi karna)
-    - 30 min baad → bot khud retry karta hai
-    - Success → auto re-enable + user ko notify karta hai
-    User ka kaam: sirf source/destination add karna. Baaki sab bot handle karta hai.
+def _update_dest_health(data: dict, dest_key: str, success: bool):
+    """Destination health tracker — auto-disable after 5 consecutive fails.
+    Auto re-enable after 30 minutes — khud try karega.
     """
     if not data["settings"].get("dest_health_check", True):
         return
     rules_map = data.get("custom_forward_rules", {})
     for src_id, src_rules in rules_map.items():
-        if str(dest_key) not in src_rules:
-            continue
-        r = src_rules[str(dest_key)]
-
-        if success:
-            was_disabled = not r.get("dest_enabled", True)
-            r["fail_count"]      = 0
-            r["dest_enabled"]    = True
-            r["disabled_reason"] = ""
-            r["disabled_at"]     = None
-            if was_disabled:
-                logger.info(f"Dest {dest_key} auto re-enabled after success")
-                # ✅ User ko automatically notify karo — kuch karna nahi
-                if user_id:
-                    try:
-                        from config import bot as _b
-                        asyncio.create_task(_b.send_message(
-                            user_id,
-                            f"✅ **Destination Automatically Restored!**\n\n"
-                            f"🆔 `{dest_key}`\n\n"
-                            f"Bot ne is destination pe successfully message bhej diya.\n"
-                            f"Forwarding **automatically resume** ho gayi hai — aapko kuch nahi karna tha! 🎉"
-                        ))
-                    except Exception:
-                        pass
-        else:
-            # 30 min baad auto retry check
-            disabled_at = r.get("disabled_at")
-            if not r.get("dest_enabled", True) and disabled_at:
-                if time.time() - disabled_at >= 1800:
+        if str(dest_key) in src_rules:
+            r = src_rules[str(dest_key)]
+            if success:
+                r["fail_count"] = 0
+                # Agar manually ya auto disabled tha — re-enable karo on success
+                if not r.get("dest_enabled", True):
                     r["dest_enabled"]    = True
-                    r["fail_count"]      = 0
                     r["disabled_reason"] = ""
                     r["disabled_at"]     = None
-                    logger.info(f"Dest {dest_key} auto retry after 30min cooldown")
-                    return  # Is message ko try hone do
+                    logger.info(f"Dest {dest_key} auto re-enabled after success")
+            else:
+                # ✅ FIX: Pehle check karo — 30 min baad auto re-enable
+                disabled_at = r.get("disabled_at")
+                if not r.get("dest_enabled", True) and disabled_at:
+                    if time.time() - disabled_at >= 1800:  # 30 minutes
+                        r["dest_enabled"]    = True
+                        r["fail_count"]      = 0
+                        r["disabled_reason"] = ""
+                        r["disabled_at"]     = None
+                        logger.info(f"Dest {dest_key} auto re-enabled after 30min cooldown")
+                        return  # Is message ko try hone do
 
-            r["fail_count"] = r.get("fail_count", 0) + 1
-            if r["fail_count"] >= 5:
-                r["dest_enabled"]    = False
-                r["disabled_reason"] = reason_hint or "Auto-paused: repeated failures (30 min mein bot khud retry karega)"
-                r["disabled_at"]     = time.time()
-                from database import save_persistent_db as _spdb
-                _spdb()
-                logger.warning(f"Dest {dest_key} auto-paused — bot will auto retry in 30min")
-                # ✅ User ko automatically notify karo — simple, koi manual step nahi
-                if user_id:
-                    try:
-                        from config import bot as _b
-                        asyncio.create_task(_b.send_message(
-                            user_id,
-                            f"⏸️ **Destination Temporarily Paused**\n\n"
-                            f"🆔 `{dest_key}`\n\n"
-                            f"{'📋 ' + reason_hint + chr(10) + chr(10) if reason_hint else ''}"
-                            f"**Bot ne automatically pause kar diya hai.**\n"
-                            f"🔄 Bot **30 minute baad khud retry karega** — aapko kuch nahi karna.\n\n"
-                            f"_Jab destination theek ho jayegi, bot automatically resume kar dega "
-                            f"aur aapko notify karega._ ✅"
-                        ))
-                    except Exception:
-                        pass
+                r["fail_count"] = r.get("fail_count", 0) + 1
+                if r["fail_count"] >= 5:
+                    r["dest_enabled"]    = False
+                    r["disabled_reason"] = "Auto-disabled: 5 consecutive failures (30 min mein auto retry hoga)"
+                    r["disabled_at"]     = time.time()  # Timestamp save karo
+                    from database import save_persistent_db as _spdb
+                    _spdb()
+                    logger.warning(f"Dest {dest_key} auto-disabled — will auto retry in 30min")
 
 
 def _update_src_stats(data: dict, source_id, count: int = 1):
@@ -502,7 +466,7 @@ async def _send_one_dest(client, user_id, target, final_text, media_to_send,
                         await client.pin_message(target, sent_msg.id, notify=False)
                     except Exception:
                         pass
-            _update_dest_health(data, str(dest), True, user_id=user_id)
+            _update_dest_health(data, str(dest), True)
             _update_src_stats(data, source_id_orig)
             _cb.record_success()
             RateLimiterRegistry.on_success(user_id, str(dest))
@@ -566,7 +530,7 @@ async def _send_one_dest(client, user_id, target, final_text, media_to_send,
                             await client.pin_message(target, sent_msg.id, notify=False)
                         except Exception:
                             pass
-                _update_dest_health(data, str(dest), True, user_id=user_id)
+                _update_dest_health(data, str(dest), True)
                 _update_src_stats(data, source_id_orig)
                 _cb.record_success()
                 _record_sent(user_id, str(dest))
@@ -574,7 +538,7 @@ async def _send_one_dest(client, user_id, target, final_text, media_to_send,
             except Exception as retry_e:
                 logger.warning(f"Retry send failed for user {user_id} dest {target}: {retry_e}")
                 # ✅ FIX: Retry failure pe hi CB/dest_health count karo, FloodWait pe nahi
-                _update_dest_health(data, str(dest), False, user_id=user_id)
+                _update_dest_health(data, str(dest), False)
                 _cb.record_failure(str(retry_e))
                 _record_error(user_id)
                 return False
@@ -604,33 +568,43 @@ async def _send_one_dest(client, user_id, target, final_text, media_to_send,
                                 await client.pin_message(resolved, sent_msg.id, notify=False)
                             except Exception:
                                 pass
-                    _update_dest_health(data, str(dest), True, user_id=user_id)
+                    _update_dest_health(data, str(dest), True)
                     _cb.record_success()
                     _record_sent(user_id, str(dest))
                     logger.info(f"[ENTITY-FIX] ✅ Send succeeded after entity resolve: dest={target} user={user_id}")
                     return True
                 else:
-                    # Entity resolve nahi hui — health tracker ko update karo, bot handle karega
+                    # Entity resolve nahi hui — PeerUser unresolvable hai
+                    # ✅ FIX: Circuit breaker mat trigger karo — yeh network/send error nahi hai,
+                    # sirf entity cache miss hai. Dest healthy rakho taaki baad mein retry ho.
                     _vk = (user_id, str(target))
                     _dest_fail_count[_vk] = _dest_fail_count.get(_vk, 0) + 1
                     if _vk not in _dest_notified:
                         _dest_notified.add(_vk)
-                        logger.warning(f"[ENTITY] PeerUser unresolvable dest={target} user={user_id} — health tracker notified")
-                    _update_dest_health(
-                        data, str(dest), False,
-                        user_id=user_id,
-                        reason_hint="Destination user se direct connection establish nahi ho paya."
-                    )
+                        logger.warning(f"[ENTITY] PeerUser unresolvable dest={target} user={user_id} — notifying once")
+                        try:
+                            asyncio.create_task(bot.send_message(
+                                user_id,
+                                f"⚠️ **Destination Unreachable — Action Needed**\n\n"
+                                f"🆔 Destination: `{target}`\n\n"
+                                f"Tumhara Telegram account is user ko **nahi pehchanta**.\n\n"
+                                f"**✅ Fix:**\n"
+                                f"1️⃣ Apne Telegram se user `{target}` ko ek message bhejo\n"
+                                f"2️⃣ Ya unka @username destination mein add karo\n\n"
+                                f"_Destination remove nahi kiya — fix ke baad automatically kaam karega._"
+                            ))
+                        except Exception:
+                            pass
                     return False
             except Exception as retry_e:
                 logger.warning(f"[ENTITY-FIX] Retry after entity resolve failed dest={target} user={user_id}: {retry_e}")
-                _update_dest_health(data, str(dest), False, user_id=user_id)
+                _update_dest_health(data, str(dest), False)
                 _cb.record_failure(str(retry_e))
                 _record_error(user_id)
                 return False
         except Exception as e:
             logger.error(f"Send error user {user_id} dest {target}: {e}")
-            _update_dest_health(data, str(dest), False, user_id=user_id)
+            _update_dest_health(data, str(dest), False)
             _cb.record_failure(str(e))
             _record_error(user_id)
             return False
@@ -864,11 +838,13 @@ async def start_user_forwarder(user_id, session_str):
                 from telethon import Button
                 await bot.send_message(
                     user_id,
-                    "⚠️ **Session Error!**\n\n"
-                    "Tumhara Telegram session invalid ho gaya hai.\n"
-                    "**Reason:** Session ek saath 2 jagah use hua.\n\n"
-                    "✅ **Solution:** Neeche Login button dabao ya /start karo.",
-                    buttons=[[Button.inline("🔁 Dobara Login Karo", b"login_menu")]]
+                    "🔄 **Session Temporarily Disconnect Ho Gayi**\n\n"
+                    "Yeh **bilkul normal** hai — Telegram kabhi kabhi session automatically "
+                    "refresh karta hai, especially naya device login karne par.\n\n"
+                    "⏱️ Fix time: **~1 minute**\n"
+                    "✅ Bas neeche button dabao → OTP dalo → Done!\n\n"
+                    "_Login ke baad forwarding automatically resume ho jaayegi._",
+                    buttons=[[Button.inline("🔁 Login Karo — 1 Min Lagega", b"login_menu")]]
                 )
             except Exception as e:
                 logger.warning(f"Could not notify user {user_id} of session error: {e}")
@@ -893,12 +869,14 @@ async def start_user_forwarder(user_id, session_str):
                 time_str = ab_fmt(user_id, "%d/%m/%Y %H:%M")
                 await bot.send_message(
                     user_id,
-                    "⚠️ **Tumhara Session Expire Ho Gaya!**\n\n"
-                    "Tumhari forwarding BAND ho gayi hai.\n\n"
-                    "**Reason:** Telegram ne session revoke kar diya.\n"
-                    f"**Time:** {time_str}\n\n"
-                    "✅ **Solution:** Neeche button dabao ya /start karo → Login → OTP\n\n" + _get_owner_footer(),
-                    buttons=[[Button.inline("🔁 Dobara Login Karo", b"login_menu")]]
+                    "🔄 **Session Expire Ho Gayi — Yeh Normal Hai!**\n\n"
+                    "Telegram security ke liye har kuch dino/hafton mein session "
+                    "automatically expire karta hai — tumhari koi galti nahi.\n\n"
+                    f"🕒 Time: {time_str}\n"
+                    "⏱️ Fix time: **~1 minute**\n\n"
+                    "✅ Bas neeche button dabao → OTP dalo → Forwarding automatically resume!\n\n"
+                    "_Tumhare saare sources aur settings safe hain._",
+                    buttons=[[Button.inline("🔁 Login Karo — 1 Min Lagega", b"login_menu")]]
                 )
                 # Admin ko bhi notify karo
                 admin_ids = list(GLOBAL_STATE.get("admins", {}).keys())
@@ -2183,21 +2161,37 @@ async def process_single_message(client, user_id, event, source_id, data):
                         logger.debug(f"[ENTITY-FIX] Retry after resolve failed dest={target}: {_re}")
 
                     if not _entity_resolved_ok:
-                        # ✅ SMART FIX: User ko kuch manually nahi karna
-                        # Bot khud destination ko health tracker mein mark karta hai
-                        # 5 fails → auto-pause → 30 min baad auto-retry → success pe auto-resume
+                        # ✅ FIX: Auto-remove BAND karo — destination raho, user ko fix karne do
+                        # Pehle: 3 fails ke baad dest permanently delete ho jaata tha — DATA LOSS!
+                        # Ab: skip karo, sirf ek baar notify karo, dest rakho
                         _vk = (user_id, str(target))
                         _dest_fail_count[_vk] = _dest_fail_count.get(_vk, 0) + 1
-                        _update_dest_health(
-                            data, str(target), False,
-                            user_id=user_id,
-                            reason_hint="Destination user ka account is account se connected nahi — bot resolve nahi kar paya."
-                        )
                         if _vk not in _dest_notified:
                             _dest_notified.add(_vk)
                             logger.warning(
                                 f"[ENTITY] PeerUser not reachable: dest={target} user={user_id} — "
-                                f"health tracker notified, auto-retry scheduled"
+                                f"keeping dest, notifying user to fix"
+                            )
+                            try:
+                                from config import bot as _b
+                                asyncio.create_task(_b.send_message(
+                                    user_id,
+                                    f"⚠️ **Destination Unreachable — Action Needed**\n\n"
+                                    f"🆔 Destination: `{target}`\n\n"
+                                    f"Tumhara Telegram account is user ko **nahi pehchanta** — "
+                                    f"isliye messages forward nahi ho rahe.\n\n"
+                                    f"**✅ Fix karo (2 tarike):**\n"
+                                    f"1️⃣ Apne main Telegram se user `{target}` ko **ek bhi message bhejo** "
+                                    f"(ya unka message receive karo), phir forwarding restart karo\n"
+                                    f"2️⃣ **Ya:** Destination delete karke unka **@username** add karo\n\n"
+                                    f"_Destination remove nahi kiya gaya — fix karne ke baad automatically kaam karega._"
+                                ))
+                            except Exception:
+                                pass
+                        else:
+                            logger.debug(
+                                f"[ENTITY] PeerUser still unresolved dest={target} user={user_id} "
+                                f"(attempt {_dest_fail_count[_vk]}) — skipping silently"
                             )
                     continue
 
@@ -2205,28 +2199,40 @@ async def process_single_message(client, user_id, event, source_id, data):
                         errors.ChatWriteForbiddenError,
                         errors.UserNotParticipantError,
                         errors.ChannelPrivateError) as perm_err:
+                    # BUG FIX: Saare permission errors ek jagah handle karo
+                    # Pehle sirf ChatAdminRequiredError tha — baaki silently fail hote the
                     err_type = type(perm_err).__name__
                     logger.warning(f"{err_type} for dest {target} — user {user_id}")
 
-                    # ✅ SMART: Reason clearly batao, bot auto-handle karta hai
                     _reason_map = {
-                        "ChatAdminRequiredError":   "Channel mein Admin permission chahiye.",
-                        "ChatWriteForbiddenError":  "Channel mein message bhejne ki permission nahi.",
-                        "UserNotParticipantError":  "Account is private channel ka member nahi.",
-                        "ChannelPrivateError":      "Channel private hai ya ID galat hai.",
+                        "ChatAdminRequiredError":   "Account ko channel mein Admin banana padega।",
+                        "ChatWriteForbiddenError":  "Channel mein post karne ki permission nahi।\nAdmin se permission lo ya bot ko admin banao।",
+                        "UserNotParticipantError":  "Account is private channel ka member nahi।\nPehle apna account us channel mein join karo।",
+                        "ChannelPrivateError":      "Channel private hai ya ID galat hai।\nChannel dobara add karo correct ID ke saath।",
                     }
                     reason_msg = _reason_map.get(err_type, f"Permission error: {err_type}")
 
                     dest_key = (user_id, str(target))
                     _dest_fail_count[dest_key] = _dest_fail_count.get(dest_key, 0) + 1
 
-                    # Bot health tracker ko update karo — wo auto-pause + notify karega
-                    _update_dest_health(
-                        data, str(target), False,
-                        user_id=user_id,
-                        reason_hint=reason_msg
-                    )
-                    _dest_notified.add(dest_key)
+                    # Pehli baar hi user ko notify karo (private channel = immediate fix needed)
+                    if dest_key not in _dest_notified:
+                        _dest_notified.add(dest_key)
+                        try:
+                            from config import bot as _bot
+                            await _bot.send_message(
+                                user_id,
+                                f"⚠️ **Private Destination Error!**\n\n"
+                                f"Destination `{target}` mein message nahi ja raha।\n\n"
+                                f"**Reason:** {reason_msg}\n\n"
+                                f"**Steps:**\n"
+                                f"1️⃣ Us private channel mein apna Telegram account join karo\n"
+                                f"2️⃣ Apne account ko Admin banao (post permission ke saath)\n"
+                                f"3️⃣ Bot restart karo\n\n"
+                                f"_Ya destination delete karke dobara add karo।_"
+                            )
+                        except Exception:
+                            pass
                     continue
 
             except Exception as e: 
