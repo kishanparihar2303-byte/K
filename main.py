@@ -9,6 +9,23 @@ telethon_patch.apply()
 
 # ✅ FIX: Bot restart time — purane queued messages ignore karne ke liye
 BOT_START_TIME = time.time()
+
+def _is_queued_message(event) -> bool:
+    """
+    Returns True agar message bot start se 5 min pehle ka hai.
+    Saare NewMessage handlers mein use karo — ek bhi queued message process nahi hoga.
+    Primary protection: GetStateRequest (startup mein).
+    Ye secondary/backup check hai.
+    """
+    try:
+        msg_date = event.message.date
+        if msg_date:
+            msg_ts = msg_date.timestamp() if hasattr(msg_date, 'timestamp') else float(msg_date)
+            return msg_ts < (BOT_START_TIME - 300)  # 5 min se purana = queued
+    except Exception:
+        pass
+    return False
+
 from scheduler import scheduler_queue_loop as _sched_queue_loop
 from aiohttp import web
 import json
@@ -166,6 +183,7 @@ def save_db_bg():
 # FIX #2: Duplicate handler hataya — sirf yeh ek handler hai /rules /notice /info /contact ke liye
 @bot.on(events.NewMessage(pattern=r'(?i)^/(rules|notice|info|contact)$'))
 async def rules_contact_cmd(event):
+    if _is_queued_message(event): return
     if not event.is_private:
         return
     uid = event.sender_id
@@ -203,17 +221,8 @@ async def start_handler(event):
         return
     user_id = event.sender_id
 
-    # ✅ FIX: Bot restart par queued /start messages ko ignore karo
-    # Railway restart ke baad purane messages queue se aate hain — spam prevent karo
-    try:
-        msg_date = event.message.date
-        if msg_date:
-            import datetime as _dt
-            msg_ts = msg_date.timestamp() if hasattr(msg_date, 'timestamp') else float(msg_date)
-            if msg_ts < (BOT_START_TIME - 30):
-                return  # 30 second se purana message — silently ignore
-    except Exception:
-        pass
+    # ✅ Queued message check
+    if _is_queued_message(event): return
 
     logger.debug(f"[START] user_id={user_id}")
 
@@ -439,6 +448,7 @@ async def handle_manual_rem_callback(event):
 
 @bot.on(events.NewMessage(pattern=r'/cancel'))
 async def cancel_handler(event):
+    if _is_queued_message(event): return
     if not event.is_private:
         return
     user_id = event.sender_id
@@ -470,6 +480,7 @@ async def cancel_handler(event):
 
 @bot.on(events.NewMessage(pattern=r'/help'))
 async def help_handler(event):
+    if _is_queued_message(event): return
     if not event.is_private:
         return
     uid = event.sender_id
@@ -506,6 +517,7 @@ async def help_handler(event):
 
 @bot.on(events.NewMessage(pattern=r'/status'))
 async def status_handler(event):
+    if _is_queued_message(event): return
     if not event.is_private:
         return
     user_id = event.sender_id
@@ -546,6 +558,7 @@ async def status_handler(event):
 
 @bot.on(events.NewMessage(pattern=r'/menu'))
 async def menu_handler(event):
+    if _is_queued_message(event): return
     if not event.is_private:
         return
     user_id = event.sender_id
@@ -577,6 +590,9 @@ async def input_handler(event):
         return
 
     user_id = event.sender_id
+
+    # ✅ Queued message check — restart se pehle ke messages ignore
+    if _is_queued_message(event): return
 
     # BUG 42 FIX: GLOBAL_STATE["blocked_users"] se check karo (db nahi)
     if is_blocked(user_id):
@@ -1966,6 +1982,7 @@ async def input_handler(event):
 # ── DIRECT ADMIN COMMANDS (no step system) ───────────────
 @bot.on(events.NewMessage(pattern='/fixsrc'))
 async def fixsrc_cmd(event):
+    if _is_queued_message(event): return
     """Source ko actual chat_id se replace karo"""
     from admin import is_admin
     if not is_admin(event.sender_id):
@@ -1984,6 +2001,7 @@ async def fixsrc_cmd(event):
 
 @bot.on(events.NewMessage(pattern=r'/delsrc (.+)'))
 async def delsrc_cmd(event):
+    if _is_queued_message(event): return
     from admin import is_admin
     if not is_admin(event.sender_id):
         return
@@ -2008,6 +2026,7 @@ async def delsrc_cmd(event):
 
 @bot.on(events.NewMessage(pattern=r'/addsrc (.+)'))
 async def addsrc_cmd(event):
+    if _is_queued_message(event): return
     """Seedha source add karo ID se"""
     from admin import is_admin
     if not is_admin(event.sender_id):
@@ -2030,6 +2049,7 @@ async def addsrc_cmd(event):
 
 @bot.on(events.NewMessage(pattern='/srccheck'))
 async def srccheck_cmd(event):
+    if _is_queued_message(event): return
     from admin import is_admin
     if not is_admin(event.sender_id):
         return
@@ -2084,6 +2104,7 @@ async def _do_graceful_restart():
 
 @bot.on(events.NewMessage(pattern='/restart'))
 async def restart_cmd(event):
+    if _is_queued_message(event): return
     """FIX 3: /restart with confirmation dialog — accidental restart prevention."""
     from admin import is_admin
     if not is_admin(event.sender_id):
@@ -2403,6 +2424,17 @@ async def main():
     while True:
         try:
             await bot.start(bot_token=BOT_TOKEN)
+
+            # ✅ QUEUED MESSAGES FLUSH — bot start ke turant baad
+            # MTProto ko batao: "Main ab current state pe hoon"
+            # Telegram purani saari queued updates DISCARD kar deta hai
+            # Matlab: restart se pehle ke /start, menu clicks, texts — sab gone
+            try:
+                from telethon.tl.functions.updates import GetStateRequest
+                _state = await bot(GetStateRequest())
+                logger.info(f"[STARTUP] Pending updates flushed — fresh start (pts={_state.pts})")
+            except Exception as _flush_err:
+                logger.warning(f"[STARTUP] Update flush warning (non-fatal): {_flush_err}")
             # ── v3: Startup banner ────────────────────────────────────────────────
             try:
                 from config import print_startup_banner
