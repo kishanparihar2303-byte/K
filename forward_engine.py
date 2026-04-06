@@ -2696,8 +2696,11 @@ async def process_text_content(msg_text, data, src_rules, has_media, event=None,
     urls = extract_all_urls(event) if event else []
     
     if link_mode == "remove":
-        # Remove all raw URLs from plain text too
-        working_text = re.sub(ROBUST_LINK_PATTERN, '', working_text)
+        # BUG FIX: ROBUST_LINK_PATTERN mein '@' bhi tha — isliye remove_user OFF hone par bhi
+        # @username hat jaata tha. Ab sirf URLs remove karo, @mentions nahi.
+        # @username removal sirf tab hogi jab remove_user/remove_usernames ON ho (neeche check hai).
+        _URL_ONLY_PATTERN = r'(?:https?://|www\.|t\.me/|telegram\.me/|telegram\.dog/)[\w\d_\-\./\?=&%#]+'
+        working_text = re.sub(_URL_ONLY_PATTERN, '', working_text)
         # Also remove any remaining <a href> tags
         working_text = re.sub(r'<a [^>]+>.*?</a>', '', working_text)
     
