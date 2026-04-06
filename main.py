@@ -2456,11 +2456,42 @@ async def main():
             # toh process nahi hote, seedha discard.
             # 3 second baad handlers wapas — sirf fresh updates process honge.
             # ══════════════════════════════════════════════════════════════
+            # ══════════════════════════════════════════════════════════════
+            # STARTUP UPDATE SKIP — 2-layer protection
+            #
+            # Layer 1: GetStateRequest — Telegram ko bolo "main current state
+            # tak sync hoon". Yeh effectively Telegram ke pending update queue
+            # ko flush karta hai bina process kiye. Yeh MTProto ka proper
+            # "drop pending updates" equivalent hai.
+            #
+            # Layer 2: _event_builders drain — koi bhi update jo Layer 1 ke
+            # baad bhi aaye (race window), use bhi silently drop karo.
+            # ══════════════════════════════════════════════════════════════
+
+            # ── Layer 1: GetStateRequest ─────────────────────────────────
+            try:
+                from telethon.tl import functions as _tl_fns
+                await bot(_tl_fns.updates.GetStateRequest())
+                logger.info("[STARTUP] ✅ GetStateRequest sent — Telegram update state synced")
+            except Exception as _gsr_err:
+                logger.warning(f"[STARTUP] GetStateRequest failed (non-fatal): {_gsr_err}")
+
+            # ── Layer 2: Handler drain (backup) ──────────────────────────
             _saved_handlers = bot._event_builders[:]  # Saare handlers save karo
             bot._event_builders.clear()               # Temporarily sab hata do
-            logger.info("[STARTUP] Handlers paused — draining queued updates...")
-            await asyncio.sleep(3)                    # Queued updates drain hone do
+            logger.info("[STARTUP] Handlers paused — draining any remaining queued updates...")
+            await asyncio.sleep(5)                    # 3→5s: getDifference response time bhi cover ho
             bot._event_builders[:] = _saved_handlers  # Handlers wapas lagao
+
+            # BUG FIX: BOT_START_TIME ko drain ke BAAD reset karo.
+            # Pehle: BOT_START_TIME module load pe set hota tha (line 12).
+            # Problem: drain ke dauran jo messages aate the (ts > old BOT_START_TIME)
+            # woh _is_queued_message se filter nahi hote the — "Main samajh nahi paya!" spam.
+            # Ab: drain khatam hone ke baad reset → sirf truly fresh messages process honge.
+            import sys as _sys
+            _sys.modules[__name__].BOT_START_TIME = time.time()
+            global BOT_START_TIME
+            BOT_START_TIME = time.time()
             logger.info("[STARTUP] ✅ Queue drained — bot ready for fresh messages only")
             # ── v3: Startup banner ────────────────────────────────────────────────
             try:
