@@ -7,21 +7,27 @@ import datetime
 import telethon_patch
 telethon_patch.apply()
 
-# ✅ FIX: Bot restart time — purane queued messages ignore karne ke liye
+# ✅ QUEUED MESSAGES — COMPLETE ELIMINATION
+# BOT_START_TIME se pehle ke SAARE events (NewMessage + CallbackQuery) block honge
 BOT_START_TIME = time.time()
 
 def _is_queued_message(event) -> bool:
     """
-    Returns True agar message bot start se 5 min pehle ka hai.
-    Saare NewMessage handlers mein use karo — ek bhi queued message process nahi hoga.
-    Primary protection: GetStateRequest (startup mein).
-    Ye secondary/backup check hai.
+    True return karo agar event bot start se PEHLE ka hai.
+    NewMessage aur CallbackQuery dono ke liye kaam karta hai.
+    
+    BUG FIX: Pehle (BOT_START_TIME - 300) tha — galat direction.
+    Correct: koi bhi event jo BOT_START_TIME se pehle ka ho = queued = ignore.
     """
     try:
-        msg_date = event.message.date
-        if msg_date:
-            msg_ts = msg_date.timestamp() if hasattr(msg_date, 'timestamp') else float(msg_date)
-            return msg_ts < (BOT_START_TIME - 300)  # 5 min se purana = queued
+        # NewMessage — event.message.date
+        date = getattr(event, 'date', None)
+        if date is None:
+            msg = getattr(event, 'message', None)
+            date = getattr(msg, 'date', None) if msg else None
+        if date:
+            ts = date.timestamp() if hasattr(date, 'timestamp') else float(date)
+            return ts < BOT_START_TIME  # Bot start se pehle = queued
     except Exception:
         pass
     return False
@@ -2425,10 +2431,35 @@ async def main():
         try:
             await bot.start(bot_token=BOT_TOKEN)
 
-            # ✅ QUEUED MESSAGES FLUSH — bot start ke turant baad
-            # MTProto ko batao: "Main ab current state pe hoon"
-            # Telegram purani saari queued updates DISCARD kar deta hai
-            # Matlab: restart se pehle ke /start, menu clicks, texts — sab gone
+            # ══════════════════════════════════════════════════════════════
+            # ✅ GLOBAL QUEUED EVENT BLOCKER — LAYER 1 (Telethon level)
+            # Ye filter SAARE events ke liye hai — NewMessage, CallbackQuery,
+            # sab kuch. BOT_START_TIME se pehle ka koi bhi event process
+            # nahi hoga — chahe kitne bhi handlers ho.
+            # ══════════════════════════════════════════════════════════════
+            @bot.on(events.Raw())
+            async def _global_queue_guard(update):
+                """
+                Har incoming raw update check karo.
+                BOT_START_TIME se pehle ka = queued = StopPropagation (block karo).
+                Fresh update = kuch mat karo = normal handlers process karein.
+                """
+                try:
+                    date = getattr(update, 'date', None)
+                    if date:
+                        ts = date.timestamp() if hasattr(date, 'timestamp') else float(date)
+                        if ts < BOT_START_TIME:
+                            raise events.StopPropagation()  # Queued — block karo
+                except events.StopPropagation:
+                    raise  # Re-raise — propagation band karo
+                except Exception:
+                    pass
+                # Date nahi mila ya fresh update — aage jaane do
+
+            # ══════════════════════════════════════════════════════════════
+            # ✅ LAYER 2 — MTProto level flush (Telegram server side)
+            # GetStateRequest Telegram ko batata hai "main current state pe hoon"
+            # ══════════════════════════════════════════════════════════════
             try:
                 from telethon.tl.functions.updates import GetStateRequest
                 _state = await bot(GetStateRequest())
