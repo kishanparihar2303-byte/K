@@ -1501,6 +1501,24 @@ async def input_handler(event):
             buttons=[Button.inline("🔙 Back", b"kw_filter_menu")]
         )
 
+    elif step == "wait_delay":
+        # BUG FIX: "wait_delay" step ka handler missing tha — user manually number type
+        # karta tha to koi handler nahi tha, value save nahi hoti thi, delay 0 rehta tha.
+        # Ab direct seconds mein save hoga.
+        try:
+            val = int(event.text.strip())
+            if val < 0:
+                raise ValueError("Negative delay not allowed")
+            data["settings"]["custom_delay"] = val
+            data["step"] = None
+            await save_db_async()
+            await event.respond(
+                f"✅ Delay set ho gaya: **{val} seconds**.",
+                buttons=[Button.inline("🏠 Menu", b"main_menu")]
+            )
+        except Exception:
+            await event.respond("❌ Invalid number. Sirf positive number bhejo (jaise: `5`)")
+
     elif step == "wait_delay_val":
         try:
             val = int(event.text.strip())
