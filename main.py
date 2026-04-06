@@ -2432,40 +2432,18 @@ async def main():
             await bot.start(bot_token=BOT_TOKEN)
 
             # ══════════════════════════════════════════════════════════════
-            # ✅ GLOBAL QUEUED EVENT BLOCKER — LAYER 1 (Telethon level)
-            # Ye filter SAARE events ke liye hai — NewMessage, CallbackQuery,
-            # sab kuch. BOT_START_TIME se pehle ka koi bhi event process
-            # nahi hoga — chahe kitne bhi handlers ho.
+            # ✅ QUEUED UPDATES — COMPLETE DRAIN
+            # Saare registered handlers temporarily hata do.
+            # Telegram ke queued updates aate hain — koi handler nahi
+            # toh process nahi hote, seedha discard.
+            # 3 second baad handlers wapas — sirf fresh updates process honge.
             # ══════════════════════════════════════════════════════════════
-            @bot.on(events.Raw())
-            async def _global_queue_guard(update):
-                """
-                Har incoming raw update check karo.
-                BOT_START_TIME se pehle ka = queued = StopPropagation (block karo).
-                Fresh update = kuch mat karo = normal handlers process karein.
-                """
-                try:
-                    date = getattr(update, 'date', None)
-                    if date:
-                        ts = date.timestamp() if hasattr(date, 'timestamp') else float(date)
-                        if ts < BOT_START_TIME:
-                            raise events.StopPropagation()  # Queued — block karo
-                except events.StopPropagation:
-                    raise  # Re-raise — propagation band karo
-                except Exception:
-                    pass
-                # Date nahi mila ya fresh update — aage jaane do
-
-            # ══════════════════════════════════════════════════════════════
-            # ✅ LAYER 2 — MTProto level flush (Telegram server side)
-            # GetStateRequest Telegram ko batata hai "main current state pe hoon"
-            # ══════════════════════════════════════════════════════════════
-            try:
-                from telethon.tl.functions.updates import GetStateRequest
-                _state = await bot(GetStateRequest())
-                logger.info(f"[STARTUP] Pending updates flushed — fresh start (pts={_state.pts})")
-            except Exception as _flush_err:
-                logger.warning(f"[STARTUP] Update flush warning (non-fatal): {_flush_err}")
+            _saved_handlers = bot._event_builders[:]  # Saare handlers save karo
+            bot._event_builders.clear()               # Temporarily sab hata do
+            logger.info("[STARTUP] Handlers paused — draining queued updates...")
+            await asyncio.sleep(3)                    # Queued updates drain hone do
+            bot._event_builders[:] = _saved_handlers  # Handlers wapas lagao
+            logger.info("[STARTUP] ✅ Queue drained — bot ready for fresh messages only")
             # ── v3: Startup banner ────────────────────────────────────────────────
             try:
                 from config import print_startup_banner
