@@ -792,11 +792,40 @@ def _normalize_amazon_url(url: str) -> str:
 _PRODUCT_DOMAINS = (
     "amazon.in", "amazon.com", "amazon.co", "amzn.in", "amzn.to",
     "flipkart.com", "fkrt.it", "fk.io",
-    "meesho.com", "myntra.com", "ajio.com", "nykaa.com",
+    "meesho.com", "myntra.com", "myntr.in", "myntr.it",  # FIX: myntra short links added
+    "ajio.com", "nykaa.com",
     "snapdeal.com", "tatacliq.com", "reliancedigital.com",
     "paytmmall.com", "shopsy.in", "jiomart.com",
     "indiamart.com", "industrybuying.com", "moglix.com",
 )
+
+# ── Short-link domains → always resolve before ID extraction ─────────────────
+_SHORT_LINK_DOMAINS = (
+    "amzn.to", "amzn.in", "fkrt.it", "bit.ly", "tinyurl", "t.co",
+    "tiny.cc", "rb.gy", "cutt.ly", "shorturl", "ow.ly", "s.click",
+    "clnk.in", "dl.flipkart", "shrsl.com", "myntr.in", "myntr.it",
+    "linkin.bio", "go.flipkart", "fk.io", "nyka.in", "ajio.to",
+    "meesho.page.link", "shp.ee",
+)
+
+def _is_short_link(url: str) -> bool:
+    """
+    Short link detect karo — 2 tarike se:
+    1. Domain known short-link service hai
+    2. Path bahut chhota hai (≤ 12 chars, sirf alphanumeric/dash) — generic short link pattern
+    """
+    u_lower = url.lower()
+    if any(d in u_lower for d in _SHORT_LINK_DOMAINS):
+        return True
+    try:
+        import urllib.parse as _sup
+        path_parts = [p for p in _sup.urlparse(url).path.split("/") if p]
+        if path_parts and len(path_parts) == 1 and len(path_parts[0]) <= 12:
+            if re.match(r'^[A-Za-z0-9_\-]+$', path_parts[0]):
+                return True
+    except Exception:
+        pass
+    return False
 
 def _is_product_url(url: str) -> bool:
     """Return True only if URL is from a known shopping/product domain."""
@@ -804,45 +833,76 @@ def _is_product_url(url: str) -> bool:
     return any(d in u_lower for d in _PRODUCT_DOMAINS)
 
 
+def _strip_tracking_params(url: str) -> str:
+    """
+    URL se sab tracking/affiliate query params strip karo.
+    Sirf domain + path rakho — product ID path mein hota hai, query mein nahi
+    (Amazon ASIN bhi path mein hota hai, query mein nahi).
+    """
+    _TRACKING_PARAMS = {
+        # Amazon
+        "tag", "ref", "ref_", "linkCode", "linkId", "camp", "creative",
+        "creativeASIN", "ascsubtag", "th", "psc", "smid", "sprefix",
+        # Flipkart
+        "affid", "affExtParam1", "affExtParam2", "otracker", "otracker1",
+        "fm", "iid", "ppt", "ppn", "ssid", "qH",
+        # Common
+        "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+        "fbclid", "gclid", "msclkid", "dclid", "zanpid", "clickref",
+        "source", "s", "afftrack",
+    }
+    try:
+        import urllib.parse as _tp
+        parsed = _tp.urlparse(url)
+        qs = _tp.parse_qs(parsed.query, keep_blank_values=False)
+        # sirf non-tracking params rakho (product-specific like pid, itemId, etc.)
+        clean_qs = {k: v for k, v in qs.items() if k.lower() not in _TRACKING_PARAMS}
+        # Rebuild URL: path (tracking-param-free query agar bacha to rakho)
+        new_query = _tp.urlencode(clean_qs, doseq=True)
+        rebuilt = _tp.urlunparse((
+            parsed.scheme, parsed.netloc, parsed.path,
+            parsed.params, new_query, ""  # fragment strip
+        ))
+        return rebuilt
+    except Exception:
+        return url
+
+
 def _extract_product_id_from_url(url: str):
     """
-    Product URL se canonical ID extract karo — affiliate/tracking params ignore.
-    Returns None if URL is not from a known product domain OR product ID not found.
-
-    ✅ FIX: Only processes known product domains.
-           Non-product URLs (t.me, news, etc.) return None and are IGNORED
-           by the product filter — preventing false positive blocks.
+    Product URL se canonical ID extract karo.
+    - Affiliate/tracking params ignore
+    - Kisi bhi variation mein same product → same ID
+    Returns None if not a known product domain.
     """
     if not _is_product_url(url):
-        return None   # ✅ FIX: non-product URL — don't store, don't check
+        return None
 
+    # Tracking params pehle strip karo
+    url = _strip_tracking_params(url)
     u_lower = url.lower()
     import urllib.parse as _up
 
     # ── Amazon / amzn ────────────────────────────────────────────────────────
     if "amazon" in u_lower or "amzn" in u_lower:
-        # Priority order: most specific pattern first
         for pat in [
             r"/(?:dp|gp/product|product-reviews|exec/obidos/ASIN)/([A-Z0-9]{10})",
             r"[?&](?:ASIN|asin)=([A-Z0-9]{10})",
-            # Looser match — 10-char alphanumeric segment in product path
             r"/([A-Z0-9]{10})(?:[/?&]|$)",
         ]:
             m = re.search(pat, url, re.IGNORECASE)
             if m:
                 return f"amz_{m.group(1).upper()}"
-        # ✅ FIX: If Amazon URL but ASIN not extractable (short amzn.in link)
-        # return a stable hash based on the full URL path (not just domain)
-        # so different short links are treated as different products
+        # Fallback: path-based stable hash (short amzn.in link jis ko resolve nahi kar sake)
         try:
             parsed = _up.urlparse(url)
-            stable = f"{parsed.netloc}{parsed.path}".rstrip("/").lower()
-            return f"amz_short_{hashlib.md5(stable.encode()).hexdigest()[:10]}"
+            stable = parsed.path.rstrip("/").lower()
+            return f"amz_p_{hashlib.md5(stable.encode()).hexdigest()[:12]}"
         except Exception:
             pass
 
     # ── Flipkart ─────────────────────────────────────────────────────────────
-    if "flipkart" in u_lower or "fkrt" in u_lower:
+    if "flipkart" in u_lower or "fkrt" in u_lower or "fk.io" in u_lower:
         try:
             parsed = _up.urlparse(url)
             p = _up.parse_qs(parsed.query)
@@ -854,9 +914,8 @@ def _extract_product_id_from_url(url: str):
             m2 = re.search(r"/([0-9A-Z]{16,20})(?:[/?]|$)", url, re.IGNORECASE)
             if m2:
                 return f"fk_{m2.group(1)}"
-            # Short fkrt.it link — stable hash
-            stable = f"{parsed.netloc}{parsed.path}".rstrip("/").lower()
-            return f"fk_short_{hashlib.md5(stable.encode()).hexdigest()[:10]}"
+            stable = parsed.path.rstrip("/").lower()
+            return f"fk_p_{hashlib.md5(stable.encode()).hexdigest()[:12]}"
         except Exception:
             pass
 
@@ -865,20 +924,101 @@ def _extract_product_id_from_url(url: str):
         m = re.search(r"/product/(\d+)", url, re.IGNORECASE)
         if m:
             return f"ms_{m.group(1)}"
+        m2 = re.search(r"/(\d{6,})(?:[/?]|$)", url, re.IGNORECASE)
+        if m2:
+            return f"ms_{m2.group(1)}"
 
-    # ── Myntra ───────────────────────────────────────────────────────────────
-    if "myntra" in u_lower:
-        m = re.search(r"/buy/[^/]+/(\d+)", url, re.IGNORECASE)
+    # ── Myntra (myntra.com + myntr.in / myntr.it short links) ────────────────
+    if "myntra" in u_lower or "myntr." in u_lower:
+        # Standard: /buy/brand/slug/PRODUCT_ID/buy
+        m = re.search(r"/buy/[^/]+/(\d{6,})", url, re.IGNORECASE)
         if m:
             return f"myn_{m.group(1)}"
+        # Any long numeric segment in path
+        m = re.search(r"/(\d{6,})(?:[/?]|$)", url, re.IGNORECASE)
+        if m:
+            return f"myn_{m.group(1)}"
+        # Short link fallback (if not resolved)
+        try:
+            stable = _up.urlparse(url).path.rstrip("/").lower()
+            return f"myn_p_{hashlib.md5(stable.encode()).hexdigest()[:12]}"
+        except Exception:
+            pass
 
-    # ── Other product domains — stable path hash ──────────────────────────
+    # ── Ajio ─────────────────────────────────────────────────────────────────
+    if "ajio" in u_lower:
+        # ajio.com/p/RF2140-WHT-XL or /p/CODE
+        m = re.search(r"/p/([A-Z0-9\-]+)(?:[/?]|$)", url, re.IGNORECASE)
+        if m:
+            return f"ajio_{m.group(1).upper()}"
+        m2 = re.search(r"/(\d{6,})(?:[/?]|$)", url, re.IGNORECASE)
+        if m2:
+            return f"ajio_{m2.group(1)}"
+
+    # ── Nykaa ────────────────────────────────────────────────────────────────
+    if "nykaa" in u_lower:
+        # nykaa.com/.../p/PRODUCT_ID
+        m = re.search(r"/p/(\d+)", url, re.IGNORECASE)
+        if m:
+            return f"nyk_{m.group(1)}"
+        m2 = re.search(r"/(\d{5,})(?:[/?]|$)", url, re.IGNORECASE)
+        if m2:
+            return f"nyk_{m2.group(1)}"
+
+    # ── Snapdeal ──────────────────────────────────────────────────────────────
+    if "snapdeal" in u_lower:
+        m = re.search(r"/product/[^/]+/(\d+)", url, re.IGNORECASE)
+        if m:
+            return f"sd_{m.group(1)}"
+
+    # ── TataCliq ──────────────────────────────────────────────────────────────
+    if "tatacliq" in u_lower:
+        m = re.search(r"/p-[^/]*-(\d+)", url, re.IGNORECASE)
+        if not m:
+            m = re.search(r"/(\d{8,})(?:[/?]|$)", url, re.IGNORECASE)
+        if m:
+            return f"tc_{m.group(1)}"
+
+    # ── JioMart ───────────────────────────────────────────────────────────────
+    if "jiomart" in u_lower:
+        m = re.search(r"/p/[^/]+-(\d+)", url, re.IGNORECASE)
+        if not m:
+            m = re.search(r"/(\d{6,})(?:[/?]|$)", url, re.IGNORECASE)
+        if m:
+            return f"jio_{m.group(1)}"
+
+    # ── Shopsy ───────────────────────────────────────────────────────────────
+    if "shopsy" in u_lower:
+        m = re.search(r"/p/[^/]+/(\d+)", url, re.IGNORECASE)
+        if m:
+            return f"shp_{m.group(1)}"
+
+    # ── IndiaMart ────────────────────────────────────────────────────────────
+    if "indiamart" in u_lower:
+        m = re.search(r"/proddetail/[^/]+-(\d+)", url, re.IGNORECASE)
+        if m:
+            return f"im_{m.group(1)}"
+
+    # ── Generic fallback — path-only hash (query params already stripped) ────
+    # Path-only hash ensure karta hai ki same product different query params ke saath
+    # bhi same ID produce kare (e.g. paytmmall, reliancedigital, etc.)
     try:
-        import urllib.parse as _up2
-        parsed = _up2.urlparse(url)
-        stable = f"{parsed.netloc}{parsed.path}".rstrip("/").lower()
-        domain_key = next((d.replace(".", "_") for d in _PRODUCT_DOMAINS if d in u_lower), "prod")
-        return f"{domain_key}_{hashlib.md5(stable.encode()).hexdigest()[:10]}"
+        parsed = _up.urlparse(url)
+        # path se sirf numeric IDs ya product slugs nikalo — common patterns
+        path_clean = parsed.path.rstrip("/").lower()
+        # Remove version/size/color suffixes jo change ho sakte hain
+        # e.g. /product/name-blue-xl/12345 → stable on numeric ID
+        long_num = re.search(r"/(\d{5,})(?:[/?]|$)", parsed.path)
+        if long_num:
+            domain_key = next(
+                (d.split(".")[0] for d in _PRODUCT_DOMAINS if d in u_lower), "prod"
+            )
+            return f"{domain_key}_{long_num.group(1)}"
+        # No numeric ID → path hash (tracking params already stripped)
+        domain_key = next(
+            (d.split(".")[0] for d in _PRODUCT_DOMAINS if d in u_lower), "prod"
+        )
+        return f"{domain_key}_p_{hashlib.md5(path_clean.encode()).hexdigest()[:12]}"
     except Exception:
         pass
 
@@ -888,37 +1028,30 @@ def _extract_product_id_from_url(url: str):
 def get_canonical_product_id(url: str):
     """
     Sync version: URL se canonical product ID nikalo.
-    Short links synchronously resolve karta hai.
+    Short links synchronously resolve karta hai — known aur auto-detected dono.
     For best results use get_canonical_product_id_async().
     """
-    short_domains = ("amzn.to", "amzn.in", "fkrt.it", "bit.ly", "tinyurl", "t.co",
-                     "tiny.cc", "rb.gy", "cutt.ly", "shorturl", "ow.ly", "s.click",
-                     "clnk.in", "dl.flipkart", "shrsl.com")
-    u_lower = url.lower()
-    if any(d in u_lower for d in short_domains):
+    if _is_short_link(url):
         url = _unshorten_sync(url)
-
     return _extract_product_id_from_url(url)
 
 
 async def get_canonical_product_id_async(url: str):
     """
-    Async version: short links properly resolve karke product ID nikalo.
-    Affiliate tags, session IDs, ref params — sab ignore hote hain.
+    Async version — sabse accurate.
+    1. Short links resolve karta hai (known domain ya auto-detected)
+    2. Tracking/affiliate params strip karta hai
+    3. Har site ke liye canonical product ID extract karta hai
     """
-    short_domains = ("amzn.to", "amzn.in", "fkrt.it", "bit.ly", "tinyurl", "t.co",
-                     "tiny.cc", "rb.gy", "cutt.ly", "shorturl", "ow.ly", "s.click",
-                     "clnk.in", "dl.flipkart", "shrsl.com")
-    u_lower = url.lower()
+    # Step 1: Short link detect aur resolve karo
+    if _is_short_link(url):
+        resolved = await _unshorten_async(url)
+        # Agar resolved URL product domain pe hai to use karo
+        # Agar resolve fail hua (same URL wapas aaya) to original try karo
+        if resolved != url:
+            url = resolved
 
-    # Step 1: Short link resolve
-    if any(d in u_lower for d in short_domains):
-        url = await _unshorten_async(url)
-        u_lower = url.lower()
-
-    # Step 2: Affiliate link direct detection (even without unshortening)
-    # Amazon: strip ?tag= and other params — ASIN still in path
-    # e.g. amazon.in/dp/B08XYZ123?tag=new-21 → ASIN = B08XYZ123
+    # Step 2: Extract canonical ID (tracking params strip bhi iske andar hota hai)
     return _extract_product_id_from_url(url)
 
 def clean_text_semantic(text):

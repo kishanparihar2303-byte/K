@@ -5,7 +5,7 @@ import hashlib
 import logging
 from database import get_user_data, get_dup_data, get_prod_history, update_user_stats
 from utils import generate_content_hash, get_canonical_product_id, get_canonical_product_id_async, extract_all_urls
-from utils import _is_product_url
+from utils import _is_product_url, _is_short_link
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +43,21 @@ def _text_similarity_hash(text: str) -> str:
 def is_duplicate(user_id, event, source_id):
     """
     Single message duplicate check.
-    ✅ FIX: Also checks if this single media was part of a previously-seen album
-    (is_album_duplicate stores per-photo hashes too, so this cross-check is free).
+    FIX: smart_dup ab duplicate_filter ke bina bhi kaam karta hai -- dono
+    independent settings hain. smart_dup ON hai to sirf text-based near-dup
+    check hoga chahe duplicate_filter OFF bhi ho.
     """
     data     = get_user_data(user_id)
     settings = data["settings"]
 
-    if not settings.get("duplicate_filter"):
+    dup_filter_on = settings.get("duplicate_filter", False)
+    smart_dup_on  = settings.get("smart_dup", False)
+
+    # Dono OFF hain to kuch karna nahi
+    if not dup_filter_on and not smart_dup_on:
         return False
 
-    # Whitelist check
+    # Whitelist check (dono filters ke liye)
     text = (event.raw_text or "").lower()
     if text and settings.get("dup_whitelist_words"):
         if any(w.lower() in text for w in settings["dup_whitelist_words"]):
@@ -61,13 +66,13 @@ def is_duplicate(user_id, event, source_id):
     # Global dup scope
     hash_source_id = "global_scope" if settings.get("global_filter") else source_id
 
-    # Primary: exact content hash
-    msg_hash = generate_content_hash(event, hash_source_id)
+    # Primary: exact content hash (sirf duplicate_filter ON hone par)
+    msg_hash = generate_content_hash(event, hash_source_id) if dup_filter_on else None
 
-    # Secondary: semantic text hash (for near-duplicate text msgs)
+    # Secondary: semantic text hash (smart_dup ke liye -- duplicate_filter OFF bhi ho to chalega)
     smart_hash = None
     raw = event.raw_text or ""
-    if raw and len(raw) > 30 and settings.get("smart_dup", False):
+    if smart_dup_on and raw and len(raw) > 30:
         sh = _text_similarity_hash(raw)
         if sh:
             smart_hash = f"smart_{hash_source_id}_{sh}"
@@ -82,7 +87,6 @@ def is_duplicate(user_id, event, source_id):
         return now - dup_store["history"][h] < expiry
 
     if _is_dup_in_store(msg_hash) or _is_dup_in_store(smart_hash):
-        # Record in blocked log
         dup_store.setdefault("blocked_log", [])
         dup_store["blocked_log"].append({
             "ts": int(now),
@@ -92,7 +96,6 @@ def is_duplicate(user_id, event, source_id):
         if len(dup_store["blocked_log"]) > 50:
             dup_store["blocked_log"] = dup_store["blocked_log"][-50:]
         update_user_stats(user_id, "blocked")
-        # FIX 10: Persist dup data after blocking (debounced via save_persistent_db)
         try:
             from database import save_dup_data
             save_dup_data(user_id)
@@ -106,31 +109,23 @@ def is_duplicate(user_id, event, source_id):
     if smart_hash:
         dup_store["history"][smart_hash] = now
 
-    # RAM cleanup
-    # ✅ FIX 10: Expiry-based cleanup — no amnesia for large channels
-    # ONLY remove entries whose expiry has passed — never truncate by count
-    # This ensures 24h expiry works correctly even with 1000+ msg/hr channels
+    # RAM cleanup -- sirf expired entries hatao
     cutoff  = now - expiry
     expired = [k for k, v in list(dup_store["history"].items()) if v < cutoff]
     for k in expired:
         del dup_store["history"][k]
-    
-    # BUG FIX: Cap 5000 tak badhaya — active entries kabhi delete nahi honge
-    # Pehle 2000 cap tha jo active (within-expiry) entries bhi hata deta tha
-    # Result: same message dobara forward ho jaata tha
+
+    # BUG FIX: Cap 5000 tak
     if len(dup_store["history"]) > 5000:
         history = dup_store["history"]
-        # Sirf expired entries hatao pehle
         stale = [k for k, v in list(history.items()) if now - v >= expiry]
         for k in stale:
             del history[k]
-        # Agar abhi bhi > 4000, tabhi oldest hatao (last resort)
         if len(history) > 4000:
             remove_count = len(history) - 3000
             to_remove = list(history.keys())[:remove_count]
             for k in to_remove:
                 del history[k]
-            logger.debug(f"Dup filter: user={user_id} hard-trimmed {remove_count} entries")
 
     return False
 
@@ -173,15 +168,7 @@ async def check_product_duplicate(client, user_id, event):
     msg_text = (event.raw_text or "").strip()
     urls     = extract_all_urls(event)
 
-    try:
-        from utils import _is_product_url
-    except ImportError:
-        _is_product_url = lambda u: any(d in u.lower() for d in (
-            "amazon", "amzn", "flipkart", "fkrt", "meesho", "myntra",
-            "ajio", "nykaa", "snapdeal", "tatacliq", "paytmmall",
-            "shopsy", "jiomart", "indiamart"
-        ))
-
+    # _is_product_url already imported from utils at top of file
     product_urls = [u for u in urls if _is_product_url(u)]
 
     # FIX P2: concurrent URL resolution (LOCK ke BAHAR — no blocking)
@@ -194,10 +181,12 @@ async def check_product_duplicate(client, user_id, event):
         final_ids = []
         for url, p_id in zip(product_urls, resolved):
             if isinstance(p_id, Exception) or not p_id:
+                # Fallback: path-ONLY hash (query/tracking params strip)
+                # Same product different affiliate tag → same path → same hash
                 try:
                     _prs = _up2.urlparse(url)
-                    _clean = f"{_prs.netloc}{_prs.path}".rstrip("/").lower()
-                    p_id = f"prod_{hashlib.md5(_clean.encode()).hexdigest()[:12]}"
+                    _path_only = _prs.path.rstrip("/").lower()
+                    p_id = f"prod_p_{hashlib.md5(_path_only.encode()).hexdigest()[:12]}"
                 except Exception:
                     p_id = f"prod_{hashlib.md5(url.encode()).hexdigest()[:12]}"
             final_ids.append(p_id)

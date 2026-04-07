@@ -1502,35 +1502,57 @@ async def input_handler(event):
         )
 
     elif step == "wait_delay":
-        # BUG FIX: "wait_delay" step ka handler missing tha — user manually number type
-        # karta tha to koi handler nahi tha, value save nahi hoti thi, delay 0 rehta tha.
-        # Ab direct seconds mein save hoga.
+        # FIX: try/except sirf int conversion ke liye — save errors alag handle hote hain
+        # FIX: event.text None check add kiya (media/sticker bhejne par crash fix)
+        raw_text = event.text or event.raw_text or ""
         try:
-            val = int(event.text.strip())
-            if val < 0:
-                raise ValueError("Negative delay not allowed")
-            data["settings"]["custom_delay"] = val
-            data["step"] = None
+            val = int(raw_text.strip())
+        except (ValueError, AttributeError):
+            await event.respond("❌ Sirf number bhejo (jaise: `5`). Seconds mein.")
+            return
+        if val < 0:
+            await event.respond("❌ Delay negative nahi ho sakta. 0 ya usse zyada number do.")
+            return
+        data["settings"]["custom_delay"] = val
+        data["step"] = None
+        save_persistent_db()
+        try:
             await save_db_async()
-            await event.respond(
-                f"✅ Delay set ho gaya: **{val} seconds**.",
-                buttons=[Button.inline("🏠 Menu", b"main_menu")]
-            )
         except Exception:
-            await event.respond("❌ Invalid number. Sirf positive number bhejo (jaise: `5`)")
+            pass  # in-memory mein save ho gaya, disk save background mein hoga
+        await event.respond(
+            f"✅ Delay set ho gaya: **{val} seconds**.\n\n"
+            f"Ab har message {val}s delay se forward hoga.",
+            buttons=[[Button.inline("⚙️ Settings", b"settings_menu"),
+                      Button.inline("🏠 Menu", b"main_menu")]]
+        )
 
     elif step == "wait_delay_val":
+        # FIX: same as above — narrow except, None-safe text read
+        raw_text = event.text or event.raw_text or ""
         try:
-            val = int(event.text.strip())
-            unit = data["temp_data"].get("delay_unit", "Seconds")
-            multiplier = 60 if unit == "Minutes" else 3600 if unit == "Hours" else 86400 if unit == "Days" else 1
-            total = val * multiplier
-            data["settings"]["custom_delay"] = total
-            data["step"] = None
+            val = int(raw_text.strip())
+        except (ValueError, AttributeError):
+            await event.respond("❌ Sirf number bhejo (jaise: `5`).")
+            return
+        if val < 0:
+            await event.respond("❌ Negative value allowed nahi.")
+            return
+        unit = data["temp_data"].get("delay_unit", "Seconds")
+        multiplier = 60 if unit == "Minutes" else 3600 if unit == "Hours" else 86400 if unit == "Days" else 1
+        total = val * multiplier
+        data["settings"]["custom_delay"] = total
+        data["step"] = None
+        save_persistent_db()
+        try:
             await save_db_async()
-            await event.respond(f"✅ Delay set to {val} {unit}.", buttons=[Button.inline("🏠 Menu", b"main_menu")])
         except Exception:
-            await event.respond("❌ Invalid Number.")
+            pass
+        await event.respond(
+            f"✅ Delay set ho gaya: **{val} {unit}** ({total}s).",
+            buttons=[[Button.inline("⚙️ Settings", b"settings_menu"),
+                      Button.inline("🏠 Menu", b"main_menu")]]
+        )
 
     elif step == "wait_json_file" or step == "wait_backup_file":
         _is_backup = step == "wait_backup_file"
