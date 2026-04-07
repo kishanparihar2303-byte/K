@@ -123,7 +123,8 @@ async def show_pinned_chats(event, mode):
         dialogs = await client.get_dialogs()
         pinned = [d for d in dialogs if d.pinned]
         if not pinned:
-            return await event.respond("❌ No pinned chats found." + ("\n\n" + _get_owner_footer() if _get_owner_footer() else "") + "", buttons=[Button.inline("🏠 Menu", b"main_menu")])
+            back_cb = b"add_src" if mode == "src" else b"add_dest"
+            return await event.respond("❌ No pinned chats found." + ("\n\n" + _get_owner_footer() if _get_owner_footer() else "") + "", buttons=[Button.inline("🔙 Back", back_cb)])
         buttons = []
         # ✅ FIX: Use channel_already_exists() for smart "Already Added" detection
         # Works even when same channel was stored as invite link vs numeric ID
@@ -137,7 +138,7 @@ async def show_pinned_chats(event, mode):
             status = " ✅" if is_added else ""
             name = dialog.name[:30]
             buttons.append([Button.inline(f"{name}{status}", f"addpin_{mode}_{chat_id}".encode())])
-        buttons.append([Button.inline("🏠 Back to Menu", b"main_menu")])
+        buttons.append([Button.inline("🔙 Back", b"add_src" if mode == "src" else b"add_dest")])
         await event.respond(f"📌 Select a Pinned Chat as **{mode.upper()}**:" + ("\n\n" + _get_owner_footer() if _get_owner_footer() else ""), buttons=buttons)
     except Exception as e:
         await event.respond(f"❌ Error: {str(e)[:80]}")

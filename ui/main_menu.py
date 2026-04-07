@@ -293,19 +293,8 @@ def get_main_buttons(user_id):
         if cfg2:
             rows.append(cfg2)
 
-        # #4: Scheduler + Per-Day merged into one button → opens combined scheduler hub
+        # Translation button (scheduler removed from main menu - available in filters only)
         cfg3 = []
-        if _menu_btn_visible("scheduler"):
-            _sched      = data.get("scheduler", {})
-            _sched_on   = _sched.get("enabled", False)
-            _perday_on  = _sched.get("per_day_enabled", False)
-            if _sched_on:
-                _sched_badge = f"⏰ Scheduler  ✅ ON"
-            elif _perday_on:
-                _sched_badge = f"⏰ Scheduler  📅 Per-Day"
-            else:
-                _sched_badge = "⏰ Scheduler  ❌ OFF"
-            cfg3.append(Button.inline(_menu_btn_label("scheduler", _sched_badge), b"sched_hub"))
         if _menu_btn_visible("translation"):
             cfg3.append(Button.inline(_menu_btn_label("translation",
                 "🌐 " + ("Anuvad" if get_lang(user_id) == "hi" else "Translation")), b"translate_menu"))
@@ -604,12 +593,12 @@ async def main_menu_callback(event):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# START / STOP ENGINE
+# START / STOP ENGINE — Direct toggle, koi sub-menu nahi
+# Button click → toast notification + main menu refresh
 # ─────────────────────────────────────────────────────────────────────────────
 
 @bot.on(events.CallbackQuery(data=b"start_engine"))
 async def start_engine_cb(event):
-    await event.answer()
     uid  = event.sender_id
     data = get_user_data(uid)
 
@@ -625,63 +614,46 @@ async def start_engine_cb(event):
     data["settings"]["running"] = True
     save_persistent_db()
 
-    # BUG FIX (MAIN): Hamesha start_user_forwarder call karo
-    # Sirf running=True karna kaafi nahi — engine explicitly start karna padta hai
-    # change_notifier sirf worker.py (alag process) ke liye hai — single-process mein kaam nahi karta
-    # Note: user_sessions check NAHI karte — agar purana stale client hai bhi,
-    #       start_user_forwarder us ko disconnect karke fresh connect karta hai
     from forward_engine import start_user_forwarder
     import asyncio as _asyncio
     _asyncio.create_task(start_user_forwarder(uid, data["session"]))
 
     srcs  = len(data["sources"])
     dests = len(data["destinations"])
+    await event.answer(f"🟢 Forwarding ON!  {srcs} src → {dests} dest", alert=False)
 
+    # Main menu refresh — sub-page nahi kholna
     try:
-        _footer = _get_owner_footer()
-        try:
-            await event.edit(
-                t(uid, "fwd_started", srcs=srcs, dests=dests)
-                + ("\n\n" + _footer if _footer else ""),
-                buttons=[
-                    [Button.inline(t(uid, "stop_btn"),   b"stop_engine"),
-                     Button.inline(t(uid, "dashboard_btn"), b"dashboard_view")],
-                    [Button.inline(t(uid, "menu_label"), b"main_menu")],
-                ]
-            )
-        except errors.MessageNotModifiedError:
-            pass
+        menu_text = _build_menu_text(uid)
+        await event.edit(menu_text, buttons=get_main_buttons(uid))
     except errors.MessageNotModifiedError:
-        await event.answer("🟢 Already running!")
+        pass
+    except Exception:
+        pass
 
 
 @bot.on(events.CallbackQuery(data=b"stop_engine"))
 async def stop_engine_cb(event):
-    await event.answer()
     uid = event.sender_id
     get_user_data(uid)["settings"]["running"] = False
     save_persistent_db()
 
     today     = datetime.date.today().strftime("%Y-%m-%d")
     today_fwd = get_user_data(uid).get("analytics", {}).get("daily", {}).get(today, {}).get("forwarded", 0)
-    today_line = t(uid, "fwd_today_line", count=today_fwd) if today_fwd else ""
+    msg = "🔴 Forwarding OFF!"
+    if today_fwd:
+        msg += f"  Aaj: {today_fwd} msgs forwarded"
+    await event.answer(msg, alert=False)
 
+    # Main menu refresh — sub-page nahi kholna
     try:
-        _footer = _get_owner_footer()
-        try:
-            await event.edit(
-                t(uid, "fwd_stopped_msg", today_line=today_line)
-                + ("\n\n" + _footer if _footer else ""),
-                buttons=[
-                    [Button.inline(t(uid, "start_btn"),      b"start_engine"),
-                     Button.inline(t(uid, "dashboard_btn"),  b"dashboard_view")],
-                    [Button.inline(t(uid, "menu_label"),     b"main_menu")],
-                ]
-            )
-        except errors.MessageNotModifiedError:
-            pass
+        menu_text = _build_menu_text(uid)
+        await event.edit(menu_text, buttons=get_main_buttons(uid))
     except errors.MessageNotModifiedError:
-        await event.answer("⏹ Stopped!")
+        pass
+    except Exception:
+        pass
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

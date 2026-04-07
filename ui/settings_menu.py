@@ -1051,57 +1051,6 @@ async def aff_test_url(event):
         pass
 
 
-# Old handlers for backward compatibility
-@bot.on(events.CallbackQuery(data=b"aff_remove_amazon"))
-async def _aff_remove_amazon_compat(event):
-    await event.answer()
-    data = get_user_data(event.sender_id)
-    data.setdefault("affiliate", {})["amazon_tag"] = ""
-    save_persistent_db()
-    await event.answer("Amazon tag hata diya!", alert=True)
-    await affiliate_settings(event)
-
-@bot.on(events.CallbackQuery(data=b"aff_remove_flipkart"))
-async def _aff_remove_flipkart_compat(event):
-    await event.answer()
-    data = get_user_data(event.sender_id)
-    data.setdefault("affiliate", {})["flipkart_id"] = ""
-    save_persistent_db()
-    await event.answer("Flipkart ID hata diya!", alert=True)
-    await affiliate_settings(event)
-
-@bot.on(events.CallbackQuery(data=b"aff_set_amazon"))
-async def _aff_set_amazon_compat(event):
-    await event.answer()
-    data = get_user_data(event.sender_id)
-    data["step"]       = "wait_aff_amazon"
-    data["step_since"] = time.time()
-    await _save_step(data)
-    try:
-        await event.edit(
-            "🛒 **Amazon Affiliate Tag Set Karo**\n\nFormat: `yourtag-21`\n\nTag bhejo:",
-            buttons=[[Button.inline("❌ Cancel", b"settings_affiliate")]]
-        )
-    except errors.MessageNotModifiedError:
-        pass
-
-@bot.on(events.CallbackQuery(data=b"aff_set_flipkart"))
-async def _aff_set_flipkart_compat(event):
-    await event.answer()
-    data = get_user_data(event.sender_id)
-    data["step"]       = "wait_aff_flipkart"
-    data["step_since"] = time.time()
-    await _save_step(data)
-    try:
-        await event.edit(
-            "🛍️ **Flipkart Affiliate ID Set Karo**\n\nID bhejo:",
-            buttons=[[Button.inline("❌ Cancel", b"settings_affiliate")]]
-        )
-    except errors.MessageNotModifiedError:
-        pass
-
-
-
 # ── AI REWRITE SETTINGS — REMOVED ────────────────────────────────────────────
 @bot.on(events.CallbackQuery(data=b"ai_set_personal_key"))
 async def ai_set_personal_key(event):
@@ -2830,7 +2779,7 @@ async def timef_set_tz(event):
         pass
 
 
-@bot.on(events.CallbackQuery(pattern=b"timef_tz_set|"))
+@bot.on(events.CallbackQuery(pattern=b"^timef_tz_set\\|"))
 async def timef_tz_set(event):
     """Apply selected timezone."""
     await event.answer()
@@ -3008,7 +2957,7 @@ async def quality_toggle(event):
     await quality_filter_menu_cb(event)
 
 
-@bot.on(events.CallbackQuery(pattern=b"quality_score|"))
+@bot.on(events.CallbackQuery(pattern=b"^quality_score\\|"))
 async def quality_score_set(event):
     await event.answer()
     uid  = event.sender_id
