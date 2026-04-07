@@ -288,24 +288,22 @@ async def set_delay_flow(event):
 
 @bot.on(events.CallbackQuery(data=b"delay_reset"))
 async def delay_reset_cb(event):
-    await event.answer()
     data = get_user_data(event.sender_id)
     data["settings"]["custom_delay"] = 0
     save_persistent_db()
-    await event.answer("⏱ Delay 0 ho gaya!")
+    await event.answer("⏱ Delay 0 ho gaya!", alert=False)
     await settings_handler(event)
 
 
 
 @bot.on(events.CallbackQuery(pattern=b"delay_preset_"))
 async def delay_preset_cb(event):
-    await event.answer()
     uid  = event.sender_id
     data = get_user_data(uid)
     val  = int(event.data.decode().replace("delay_preset_", ""))
     data["settings"]["custom_delay"] = val
     data["step"] = None
-    _save_bg()
+    save_persistent_db()
     await event.answer(f"\u2705 Delay: {val}s set!", alert=False)
     await settings_handler(event)
 @bot.on(events.CallbackQuery(pattern=b"delay_unit_"))
@@ -2133,6 +2131,10 @@ async def settings_handler(event):
     # ── ADVANCED TAB ────────────────────────────────────────
     elif tab == "advanced":
         buttons = tab_row + [
+            [Button.inline("── ⚙️ Forwarding Filters v2 ──", b"stab_advanced")],
+            [Button.inline("⚙️ Fwd Filters v2",          b"fwd_filters_menu"),
+             Button.inline("🗺️ Keyword Routes",           b"fwd_keyword_routes")],
+
             [Button.inline("── Message Size & Count Limits ──", b"stab_advanced")],
             [Button.inline("📏 Message Length Limit",   b"fwd_set_length"),
              Button.inline("📦 File Size Limit",        b"fwd_set_filesize")],
@@ -2140,10 +2142,10 @@ async def settings_handler(event):
              _btn("🏥 Dest Health Check", "dest_health_check", True)],
 
             [Button.inline("── Routing & Stats ──", b"stab_advanced")],
-            [Button.inline("🗺️ Keyword Routes",          b"fwd_keyword_routes"),
-             Button.inline("📊 Source Stats",            b"fwd_src_stats")],
-            [Button.inline("🏥 Circuit Breaker",         b"cb_status"),
-             Button.inline("⚡ Rate Limiter",            b"rl_stats")],
+            [Button.inline("📊 Source Stats",            b"fwd_src_stats"),
+             Button.inline("🏥 Circuit Breaker",         b"cb_status")],
+            [Button.inline("⚡ Rate Limiter",            b"rl_stats"),
+             Button.inline("🗺️ Keyword Routes",          b"fwd_keyword_routes")],
 
             [Button.inline("── Maintenance ──", b"stab_advanced")],
             [Button.inline("🔄 Sab Dests Re-enable",    b"fwd_reenable_dests"),
